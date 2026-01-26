@@ -1,0 +1,146 @@
+export interface Point {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  ox: number;
+  oy: number;
+}
+
+export interface Spring {
+  p1: number;
+  p2: number;
+  restLength: number;
+  stiffness: number;
+}
+
+export interface MochiTier {
+  level: number;
+  name: string;
+  radius: number;
+  color: MochiColor;
+  points: number;
+}
+
+export interface MochiColor {
+  primary: string;
+  secondary: string;
+  highlight: string;
+  shadow: string;
+  cheek: string;
+}
+
+export type MochiEmotion = 'happy' | 'surprised' | 'squished' | 'flying' | 'sleepy' | 'love';
+
+export interface Mochi {
+  id: number;
+  tier: number;
+  points: Point[];
+  springs: Spring[];
+  cx: number;
+  cy: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  baseRadius: number;
+  color: MochiColor;
+  grabbed: boolean;
+  emotion: MochiEmotion;
+  emotionTimer: number;
+  squishAmount: number;
+  impactVelocity: number;
+  wobblePhase: number;
+  wobbleIntensity: number;
+  breathPhase: number;
+  lastY: number;
+  merging: boolean;
+  mergeTimer: number;
+  isDropping: boolean; // Currently being dropped by player
+  hasLanded: boolean; // Has touched something after being dropped
+  settleTimer: number; // Frames since landing - for game over grace period
+}
+
+export interface PhysicsConfig {
+  springStiffness: number;
+  damping: number;
+  pressure: number;
+  gravity: number;
+  mouseForce: number;
+  mouseRadius: number;
+  wallBounce: number;
+  friction: number;
+  squishRecovery: number;
+}
+
+export interface GameState {
+  score: number;
+  highScore: number;
+  gameOver: boolean;
+  currentMochi: Mochi | null;
+  nextTier: number;
+  dropX: number;
+  canDrop: boolean;
+  container: Container;
+}
+
+export interface Container {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  wallThickness: number;
+  overflowLine: number; // Y position of the danger line
+}
+
+export interface InputState {
+  mouseX: number;
+  mouseY: number;
+  prevMouseX: number;
+  prevMouseY: number;
+  mouseDown: boolean;
+  grabbedMochi: Mochi | null;
+  grabOffsetX: number;
+  grabOffsetY: number;
+  dragVelocityX: number;
+  dragVelocityY: number;
+}
+
+export interface CanvasContext {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  width: number;
+  height: number;
+  dpr: number;
+}
+
+export interface MergeEffect {
+  x: number;
+  y: number;
+  radius: number;
+  maxRadius: number;
+  life: number;
+  color: string;
+  particles: MergeParticle[];
+}
+
+export interface MergeParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  color: string;
+  life: number;
+}
+
+export interface ImpactStar {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  rotation: number;
+  rotationSpeed: number;
+  scale: number;
+  life: number;
+  color: string;
+}

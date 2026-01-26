@@ -1,0 +1,13 @@
+---
+---
+
+<canvas id="mochi-canvas"></canvas>
+
+<script>
+  import { init } from '../scripts/mochi';
+
+  const canvas = document.getElementById('mochi-canvas') as HTMLCanvasElement;
+  if (canvas) {
+    init(canvas);
+  }
+</script>

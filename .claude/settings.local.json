@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm install)",
+      "Bash(pnpm dev)",
+      "Bash(pnpm install:*)",
+      "Bash(echo:*)",
+      "Bash(pnpm --version:*)",
+      "Bash(/c/Users/felix/AppData/Local/pnpm/pnpm:*)",
+      "Bash(npm install)",
+      "Bash(npm install:*)",
+      "Bash(cmd //c \"npm install\")",
+      "Bash(curl:*)",
+      "WebFetch(domain:en.wikipedia.org)",
+      "WebSearch",
+      "mcp__supabase__apply_migration",
+      "mcp__supabase__get_project_url",
+      "mcp__supabase__get_publishable_keys",
+      "Bash(pnpm add:*)",
+      "Bash(ss -tlnp:*)",
+      "Bash(pnpm astro check:*)",
+      "Bash(npx tsc --noEmit)",
+      "mcp__supabase__execute_sql"
+    ]
+  }
+}
