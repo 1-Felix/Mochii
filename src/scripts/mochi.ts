@@ -1,6 +1,6 @@
 import type { Mochi, CanvasContext, GameState, Container } from './types';
 import { createMochi, updateMochi, checkMochiCollision, canMerge, mochiTiers, defaultConfig, getRandomDroppableTier } from './physics';
-import { createCanvasContext, resizeCanvas, render, addMergeEffect, addImpactStars } from './renderer';
+import { createCanvasContext, resizeCanvas, render, addMergeEffect, addImpactStars, addCherryBlossoms, triggerCatWalk, updateEasterEggs, isCatWalking } from './renderer';
 import { initLeaderboard, getLeaderboard, getOrCreatePlayerName, submitScore } from './leaderboard';
 
 let context: CanvasContext;
@@ -10,6 +10,13 @@ let animationId: number;
 let lastTime = 0;
 let dropCooldown = 0;
 let playerName: string;
+
+// Easter egg tracking
+const KONAMI_CODE = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'KeyB', 'KeyA'];
+let konamiIndex = 0;
+let typedChars = '';
+const IDLE_TIMEOUT = 30000; // 30 seconds
+let wasCatWalking = false; // Track cat state for emotion reset
 
 // Fixed container size to prevent cheating
 const CONTAINER_WIDTH = 320;
@@ -41,9 +48,18 @@ function initGameState(): void {
     dropX: container.x + container.width / 2,
     canDrop: true,
     container,
+    mouseX: 0,
+    mouseY: 0,
+    // Easter eggs
+    nightMode: false,
+    lastInteraction: Date.now(),
+    easterEggActive: null,
+    easterEggTimer: 0,
   };
   mochis = [];
   dropCooldown = 0;
+  konamiIndex = 0;
+  typedChars = '';
 }
 
 const DROP_COOLDOWN = 45; // Frames to wait between drops (~0.75 seconds)
@@ -219,7 +235,40 @@ function gameLoop(timestamp: number): void {
   const dt = Math.min((timestamp - lastTime) / 16.667, 3);
   lastTime = timestamp;
 
+  // Update easter egg timer
+  if (gameState.easterEggTimer > 0) {
+    gameState.easterEggTimer -= dt;
+    if (gameState.easterEggTimer <= 0) {
+      gameState.easterEggActive = null;
+    }
+  }
+
+  // Check for idle - make mochi sleepy
+  const idleTime = Date.now() - gameState.lastInteraction;
+  if (idleTime > IDLE_TIMEOUT && !gameState.gameOver) {
+    for (const mochi of mochis) {
+      if (mochi.emotion !== 'sleepy') {
+        mochi.emotion = 'sleepy';
+        mochi.emotionTimer = 999; // Keep sleepy until interaction
+      }
+    }
+  }
+
   update(dt);
+  updateEasterEggs(dt);
+
+  // Check if cat just finished walking - reset mochi emotions
+  const catWalking = isCatWalking();
+  if (wasCatWalking && !catWalking) {
+    for (const mochi of mochis) {
+      if (mochi.emotion === 'surprised') {
+        mochi.emotion = 'happy';
+        mochi.emotionTimer = 60; // Brief happy moment before returning to normal
+      }
+    }
+  }
+  wasCatWalking = catWalking;
+
   render(context, mochis, gameState, getLeaderboard(), playerName);
 
   animationId = requestAnimationFrame(gameLoop);
@@ -235,11 +284,89 @@ function handleResize(): void {
 function handleMouseMove(e: MouseEvent): void {
   const rect = context.canvas.getBoundingClientRect();
   gameState.dropX = e.clientX - rect.left;
+  gameState.mouseX = e.clientX - rect.left;
+  gameState.mouseY = e.clientY - rect.top;
+  gameState.lastInteraction = Date.now();
+}
+
+function handleKeyDown(e: KeyboardEvent): void {
+  gameState.lastInteraction = Date.now();
+
+  // Konami code detection
+  if (e.code === KONAMI_CODE[konamiIndex]) {
+    konamiIndex++;
+    if (konamiIndex === KONAMI_CODE.length) {
+      // Konami code complete!
+      triggerKonamiEasterEgg();
+      konamiIndex = 0;
+    }
+  } else {
+    konamiIndex = e.code === KONAMI_CODE[0] ? 1 : 0;
+  }
+
+  // Secret word detection (only letters)
+  if (e.key.length === 1 && e.key.match(/[a-z]/i)) {
+    typedChars += e.key.toLowerCase();
+    // Keep only last 10 chars
+    if (typedChars.length > 10) {
+      typedChars = typedChars.slice(-10);
+    }
+    // Check for secret words
+    if (typedChars.includes('mochi') || typedChars.includes('matcha')) {
+      triggerCatEasterEgg();
+      typedChars = '';
+    }
+  }
+}
+
+function triggerKonamiEasterEgg(): void {
+  gameState.easterEggActive = 'konami';
+  gameState.easterEggTimer = 300; // ~5 seconds
+  addCherryBlossoms(context.width, context.height, 50);
+  // Make all mochi show love
+  for (const mochi of mochis) {
+    mochi.emotion = 'love';
+    mochi.emotionTimer = 300;
+  }
+}
+
+function triggerCatEasterEgg(): void {
+  triggerCatWalk(context.width, context.height);
+  // Make mochi surprised then happy
+  for (const mochi of mochis) {
+    mochi.emotion = 'surprised';
+    mochi.emotionTimer = 60;
+  }
 }
 
 function handleClick(e: MouseEvent): void {
   const rect = context.canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  gameState.lastInteraction = Date.now();
+
+  // Check for moon click (top right area)
+  const moonX = context.width - 35;
+  const moonY = 35;
+  const dx = x - moonX;
+  const dy = y - moonY;
+  if (Math.sqrt(dx * dx + dy * dy) < 25) {
+    gameState.nightMode = !gameState.nightMode;
+    if (gameState.nightMode) {
+      // Make mochi sleepy in night mode
+      for (const mochi of mochis) {
+        mochi.emotion = 'sleepy';
+        mochi.emotionTimer = 120;
+      }
+    } else {
+      // Wake up! Happy mochi in day mode
+      for (const mochi of mochis) {
+        mochi.emotion = 'happy';
+        mochi.emotionTimer = 90;
+      }
+    }
+    return;
+  }
 
   if (gameState.gameOver) {
     // Restart game
@@ -252,6 +379,7 @@ function handleClick(e: MouseEvent): void {
 
 function handleTouchMove(e: TouchEvent): void {
   e.preventDefault();
+  gameState.lastInteraction = Date.now();
   if (e.touches.length > 0) {
     const rect = context.canvas.getBoundingClientRect();
     gameState.dropX = e.touches[0].clientX - rect.left;
@@ -260,6 +388,7 @@ function handleTouchMove(e: TouchEvent): void {
 
 function handleTouchEnd(e: TouchEvent): void {
   e.preventDefault();
+  gameState.lastInteraction = Date.now();
   if (gameState.gameOver) {
     initGameState();
     return;
@@ -279,6 +408,7 @@ export function init(canvas: HTMLCanvasElement): () => void {
 
   // Event listeners
   window.addEventListener('resize', handleResize);
+  window.addEventListener('keydown', handleKeyDown);
   canvas.addEventListener('mousemove', handleMouseMove);
   canvas.addEventListener('click', handleClick);
   canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
@@ -292,6 +422,7 @@ export function init(canvas: HTMLCanvasElement): () => void {
   return () => {
     cancelAnimationFrame(animationId);
     window.removeEventListener('resize', handleResize);
+    window.removeEventListener('keydown', handleKeyDown);
     canvas.removeEventListener('mousemove', handleMouseMove);
     canvas.removeEventListener('click', handleClick);
     canvas.removeEventListener('touchmove', handleTouchMove);

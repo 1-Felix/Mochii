@@ -79,11 +79,30 @@ export async function submitScore(name: string, score: number): Promise<boolean>
   if (!supabase || score <= 0) return false;
 
   try {
-    const { error } = await supabase
+    // Check if player already has a score
+    const { data: existing } = await supabase
       .from('leaderboard')
-      .insert({ name, score });
+      .select('id, score')
+      .eq('name', name)
+      .single();
 
-    if (error) throw error;
+    if (existing) {
+      // Only update if new score is higher
+      if (score > existing.score) {
+        const { error } = await supabase
+          .from('leaderboard')
+          .update({ score })
+          .eq('id', existing.id);
+        if (error) throw error;
+      }
+    } else {
+      // Insert new player
+      const { error } = await supabase
+        .from('leaderboard')
+        .insert({ name, score });
+      if (error) throw error;
+    }
+
     await fetchLeaderboard();
     return true;
   } catch (e) {

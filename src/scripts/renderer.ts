@@ -1,10 +1,80 @@
-import type { Mochi, CanvasContext, MochiEmotion, Container, GameState, MergeEffect, ImpactStar } from './types';
+import type { Mochi, CanvasContext, MochiEmotion, Container, GameState, MergeEffect, ImpactStar, CherryBlossom, WalkingCat } from './types';
 import { mochiTiers } from './physics';
 import type { LeaderboardEntry } from './leaderboard';
 
 // Visual effects storage
 const mergeEffects: MergeEffect[] = [];
 const impactStars: ImpactStar[] = [];
+
+// Easter egg effects
+const cherryBlossoms: CherryBlossom[] = [];
+const walkingCat: WalkingCat = { x: -50, y: 0, direction: 1, frame: 0, active: false };
+
+// Cat sprite
+const catSprite = new Image();
+catSprite.src = '/sprites/cat_walk_12_frames_right_to_left.png';
+const CAT_FRAMES = 12;
+let catFrameWidth = 0;
+let catFrameHeight = 0;
+catSprite.onload = () => {
+  catFrameWidth = catSprite.width / CAT_FRAMES;
+  catFrameHeight = catSprite.height;
+};
+
+export function addCherryBlossoms(width: number, height: number, count: number): void {
+  for (let i = 0; i < count; i++) {
+    cherryBlossoms.push({
+      x: Math.random() * width,
+      y: -20 - Math.random() * 100,
+      vx: (Math.random() - 0.5) * 1.5,
+      vy: 0.8 + Math.random() * 1.2,
+      rotation: Math.random() * Math.PI * 2,
+      rotationSpeed: (Math.random() - 0.5) * 0.1,
+      size: 6 + Math.random() * 6,
+      opacity: 0.7 + Math.random() * 0.3,
+    });
+  }
+}
+
+export function triggerCatWalk(width: number, height: number): void {
+  walkingCat.active = true;
+  walkingCat.direction = Math.random() > 0.5 ? 1 : -1;
+  walkingCat.x = walkingCat.direction > 0 ? -40 : width + 40;
+  walkingCat.y = height - 60;
+  walkingCat.frame = 0;
+}
+
+export function isCatWalking(): boolean {
+  return walkingCat.active;
+}
+
+export function updateEasterEggs(dt: number): void {
+  // Update cherry blossoms
+  for (let i = cherryBlossoms.length - 1; i >= 0; i--) {
+    const b = cherryBlossoms[i];
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    b.vx += (Math.random() - 0.5) * 0.1 * dt; // Gentle drift
+    b.rotation += b.rotationSpeed * dt;
+    b.opacity -= 0.002 * dt;
+
+    if (b.opacity <= 0 || b.y > 800) {
+      cherryBlossoms.splice(i, 1);
+    }
+  }
+
+  // Update walking cat
+  if (walkingCat.active) {
+    walkingCat.x += walkingCat.direction * 1.5 * dt;
+    walkingCat.frame += 0.15 * dt;
+
+    // Check if cat has walked off screen
+    if ((walkingCat.direction > 0 && walkingCat.x > 1000) ||
+        (walkingCat.direction < 0 && walkingCat.x < -50)) {
+      walkingCat.active = false;
+    }
+  }
+}
 
 export function createCanvasContext(canvas: HTMLCanvasElement): CanvasContext {
   const ctx = canvas.getContext('2d');
@@ -34,23 +104,54 @@ export function resizeCanvas(context: CanvasContext): void {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-export function clearCanvas(context: CanvasContext): void {
+export function clearCanvas(context: CanvasContext, nightMode: boolean = false): void {
   const { ctx, width, height } = context;
 
-  // Matcha-inspired gradient background
-  const gradient = ctx.createLinearGradient(0, 0, 0, height);
-  gradient.addColorStop(0, '#E8F0E4'); // Light matcha cream
-  gradient.addColorStop(0.5, '#D4E4D1'); // Soft matcha
-  gradient.addColorStop(1, '#C5D9BE'); // Deeper matcha
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, width, height);
+  if (nightMode) {
+    // Cozy night mode gradient
+    const gradient = ctx.createLinearGradient(0, 0, 0, height);
+    gradient.addColorStop(0, '#2A3A4A'); // Deep night blue
+    gradient.addColorStop(0.5, '#1E2D3D'); // Darker blue
+    gradient.addColorStop(1, '#152535'); // Deep night
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
 
-  // Subtle pattern overlay for texture
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
-  for (let i = 0; i < width; i += 20) {
-    for (let j = 0; j < height; j += 20) {
-      if ((i + j) % 40 === 0) {
-        ctx.fillRect(i, j, 10, 10);
+    // Stars
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    for (let i = 0; i < 30; i++) {
+      const starX = (i * 137) % width;
+      const starY = (i * 89) % (height * 0.4);
+      const size = 1 + (i % 3);
+      ctx.beginPath();
+      ctx.arc(starX, starY, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Soft texture
+    ctx.fillStyle = 'rgba(100, 120, 150, 0.03)';
+    for (let i = 0; i < width; i += 20) {
+      for (let j = 0; j < height; j += 20) {
+        if ((i + j) % 40 === 0) {
+          ctx.fillRect(i, j, 10, 10);
+        }
+      }
+    }
+  } else {
+    // Matcha-inspired gradient background
+    const gradient = ctx.createLinearGradient(0, 0, 0, height);
+    gradient.addColorStop(0, '#E8F0E4'); // Light matcha cream
+    gradient.addColorStop(0.5, '#D4E4D1'); // Soft matcha
+    gradient.addColorStop(1, '#C5D9BE'); // Deeper matcha
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+
+    // Subtle pattern overlay for texture
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+    for (let i = 0; i < width; i += 20) {
+      for (let j = 0; j < height; j += 20) {
+        if ((i + j) % 40 === 0) {
+          ctx.fillRect(i, j, 10, 10);
+        }
       }
     }
   }
@@ -305,18 +406,31 @@ function drawFace(
       break;
 
     case 'sleepy':
+      // Soft closed eyes (curved lines like peaceful sleep)
       ctx.lineWidth = Math.max(2, 2.5 * scale);
+      ctx.lineCap = 'round';
+
+      // Left eye - gentle curved closed eye
       ctx.beginPath();
-      ctx.moveTo(cx - eyeSpacing - eyeSize * 1.2, faceY);
-      ctx.lineTo(cx - eyeSpacing + eyeSize * 1.2, faceY + eyeSize * 0.3);
+      ctx.arc(cx - eyeSpacing, faceY + eyeSize * 0.3, eyeSize * 1.1, Math.PI * 0.15, Math.PI * 0.85);
       ctx.stroke();
+
+      // Right eye - gentle curved closed eye
       ctx.beginPath();
-      ctx.moveTo(cx + eyeSpacing - eyeSize * 1.2, faceY + eyeSize * 0.3);
-      ctx.lineTo(cx + eyeSpacing + eyeSize * 1.2, faceY);
+      ctx.arc(cx + eyeSpacing, faceY + eyeSize * 0.3, eyeSize * 1.1, Math.PI * 0.15, Math.PI * 0.85);
       ctx.stroke();
+
+      // Content little smile
       ctx.beginPath();
-      ctx.arc(cx, faceY + 10 * scale, 4 * scale, Math.PI * 0.2, Math.PI * 0.8);
+      ctx.arc(cx, faceY + 9 * scale, 4 * scale, Math.PI * 0.15, Math.PI * 0.85);
       ctx.stroke();
+
+      // Cozy zzz (small, subtle)
+      ctx.fillStyle = 'rgba(74, 74, 74, 0.4)';
+      ctx.font = `${Math.max(8, 7 * scale)}px "Segoe UI", sans-serif`;
+      ctx.fillText('z', cx + eyeSpacing * 1.8, faceY - eyeSize * 1.5);
+      ctx.font = `${Math.max(6, 5 * scale)}px "Segoe UI", sans-serif`;
+      ctx.fillText('z', cx + eyeSpacing * 2.2, faceY - eyeSize * 2.5);
       break;
   }
 
@@ -554,13 +668,21 @@ export function drawMochi(context: CanvasContext, mochi: Mochi, isPreview: boole
   }
 }
 
-function drawProgressionWheel(context: CanvasContext, container: Container, currentTier: number): void {
+// Animation state for progression wheel hover effects
+const wheelAnimations: { scale: number; targetScale: number; velocity: number; wasHovered: boolean }[] =
+  Array.from({ length: 11 }, () => ({ scale: 1, targetScale: 1, velocity: 0, wasHovered: false }));
+
+// Tooltip animation state
+const tooltipAnim = { opacity: 0, offsetX: 0, currentTier: -1 };
+
+function drawProgressionWheel(context: CanvasContext, container: Container, currentTier: number, mouseX: number, mouseY: number): void {
   const { ctx } = context;
 
   // Position to the right of the container
   const wheelX = container.x + container.width + 50;
   const wheelStartY = container.y + 30;
   const spacing = 42; // Vertical spacing between tiers
+  const hoverRadius = 20; // Hover detection radius
 
   // Background panel - matcha themed
   const panelGradient = ctx.createLinearGradient(wheelX - 28, wheelStartY, wheelX + 28, wheelStartY);
@@ -575,31 +697,73 @@ function drawProgressionWheel(context: CanvasContext, container: Container, curr
   ctx.fill();
   ctx.stroke();
 
+  // Track hovered tier for tooltip
+  let hoveredTier: { index: number; y: number; name: string } | null = null;
+
   // Draw each tier
   for (let i = 0; i < mochiTiers.length; i++) {
     const tier = mochiTiers[i];
     const y = wheelStartY + i * spacing;
+    const anim = wheelAnimations[i];
 
     // Scale mochi to fit (max display radius of 16)
     const displayRadius = Math.min(16, tier.radius * 0.35);
     const isCurrentTier = i === currentTier;
 
-    // Highlight current tier - soft matcha glow
-    if (isCurrentTier) {
-      ctx.fillStyle = 'rgba(180, 210, 160, 0.7)';
+    // Check if mouse is hovering over this tier
+    const dx = mouseX - wheelX;
+    const dy = mouseY - y;
+    const isHovered = Math.sqrt(dx * dx + dy * dy) < hoverRadius;
+
+    // Trigger gentle bounce animation when newly hovered
+    if (isHovered && !anim.wasHovered) {
+      anim.velocity = 0.08; // Gentle initial pop
+    }
+    anim.wasHovered = isHovered;
+
+    // Update animation with soft spring physics
+    if (isHovered) {
+      anim.targetScale = 1.15; // Subtle scale up
+    } else {
+      anim.targetScale = 1;
+    }
+
+    // Soft, cozy spring animation
+    const springStrength = 0.06; // Gentle pull
+    const damping = 0.85; // Smooth, slow settle
+    const diff = anim.targetScale - anim.scale;
+    anim.velocity += diff * springStrength;
+    anim.velocity *= damping;
+    anim.scale += anim.velocity;
+
+    // Clamp scale
+    anim.scale = Math.max(0.95, Math.min(1.25, anim.scale));
+
+    if (isHovered) {
+      hoveredTier = { index: i, y, name: tier.name };
+    }
+
+    // Highlight current tier or animated tier
+    const showHighlight = isCurrentTier || anim.scale > 1.02;
+    if (showHighlight) {
+      const highlightAlpha = isHovered ? 0.6 : Math.min(0.5, (anim.scale - 1) * 4 + 0.2);
+      ctx.fillStyle = `rgba(170, 210, 150, ${highlightAlpha})`;
       ctx.beginPath();
-      ctx.arc(wheelX, y, 22, 0, Math.PI * 2);
+      ctx.arc(wheelX, y, 19 + (anim.scale - 1) * 15, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Draw mini mochi
+    // Draw mini mochi with animated scale
+    const finalScale = anim.scale;
+    const offsetY = (anim.scale - 1) * -2; // Slight upward bounce
+
     const gradient = ctx.createRadialGradient(
       wheelX - displayRadius * 0.2,
-      y - displayRadius * 0.2,
+      y + offsetY - displayRadius * 0.2,
       0,
       wheelX,
-      y,
-      displayRadius * 1.2
+      y + offsetY,
+      displayRadius * 1.2 * finalScale
     );
     gradient.addColorStop(0, tier.color.highlight);
     gradient.addColorStop(0.3, tier.color.primary);
@@ -607,7 +771,7 @@ function drawProgressionWheel(context: CanvasContext, container: Container, curr
 
     ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.arc(wheelX, y, displayRadius, 0, Math.PI * 2);
+    ctx.arc(wheelX, y + offsetY, displayRadius * finalScale, 0, Math.PI * 2);
     ctx.fill();
 
     // Subtle outline
@@ -628,6 +792,65 @@ function drawProgressionWheel(context: CanvasContext, container: Container, curr
       ctx.closePath();
       ctx.fill();
     }
+  }
+
+  // Animate tooltip
+  if (hoveredTier) {
+    // Switching to new tier or showing
+    if (tooltipAnim.currentTier !== hoveredTier.index) {
+      tooltipAnim.currentTier = hoveredTier.index;
+      tooltipAnim.offsetX = 8; // Start slightly to the right
+    }
+    // Fade in and slide
+    tooltipAnim.opacity += (1 - tooltipAnim.opacity) * 0.25;
+    tooltipAnim.offsetX += (0 - tooltipAnim.offsetX) * 0.2;
+  } else {
+    // Fade out
+    tooltipAnim.opacity += (0 - tooltipAnim.opacity) * 0.2;
+    if (tooltipAnim.opacity < 0.01) {
+      tooltipAnim.currentTier = -1;
+    }
+  }
+
+  // Draw tooltip with animation
+  if (tooltipAnim.opacity > 0.01 && tooltipAnim.currentTier >= 0) {
+    const tier = mochiTiers[tooltipAnim.currentTier];
+    const tierY = wheelStartY + tooltipAnim.currentTier * spacing;
+    const anim = wheelAnimations[tooltipAnim.currentTier];
+    const bounceOffsetY = (anim.scale - 1) * -2;
+
+    const tooltipX = wheelX - 38 + tooltipAnim.offsetX; // Closer to the wheel
+    const tooltipY = tierY + bounceOffsetY;
+
+    ctx.font = '13px "Segoe UI", sans-serif';
+    const textWidth = ctx.measureText(tier.name).width;
+    const padding = 12;
+    const tooltipWidth = textWidth + padding * 2;
+    const tooltipLeft = tooltipX - tooltipWidth - 4;
+
+    ctx.globalAlpha = tooltipAnim.opacity;
+
+    // Tooltip background - softer, rounder
+    ctx.fillStyle = 'rgba(55, 75, 45, 0.92)';
+    ctx.beginPath();
+    ctx.roundRect(tooltipLeft, tooltipY - 11, tooltipWidth, 22, 8);
+    ctx.fill();
+
+    // Tooltip arrow (small triangle pointing right)
+    ctx.beginPath();
+    ctx.moveTo(tooltipX - 4, tooltipY - 4);
+    ctx.lineTo(tooltipX + 1, tooltipY);
+    ctx.lineTo(tooltipX - 4, tooltipY + 4);
+    ctx.closePath();
+    ctx.fill();
+
+    // Tooltip text - centered
+    ctx.fillStyle = '#F4FCF0';
+    ctx.textAlign = 'center';
+    ctx.fillText(tier.name, tooltipLeft + tooltipWidth / 2, tooltipY + 4);
+    ctx.textAlign = 'left';
+
+    ctx.globalAlpha = 1;
   }
 }
 
@@ -714,7 +937,7 @@ function drawLeaderboard(context: CanvasContext, leaderboard: LeaderboardEntry[]
 
 export function drawUI(context: CanvasContext, gameState: GameState, leaderboard?: LeaderboardEntry[], playerName?: string): void {
   const { ctx, width } = context;
-  const { score, highScore, nextTier, gameOver, container } = gameState;
+  const { score, highScore, nextTier, gameOver, container, mouseX, mouseY } = gameState;
 
   // Check if screen is small (not enough space for progression wheel)
   const spaceOnRight = width - (container.x + container.width);
@@ -724,7 +947,16 @@ export function drawUI(context: CanvasContext, gameState: GameState, leaderboard
   ctx.fillStyle = '#4A6741';
   ctx.font = 'bold 24px "Segoe UI", sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillText(`Score: ${score}`, 20, 35);
+  const scoreText = `Score: ${score}`;
+  ctx.fillText(scoreText, 20, 35);
+
+  // Player name - very subtle, to the right of score
+  if (playerName) {
+    const scoreWidth = ctx.measureText(scoreText).width;
+    ctx.fillStyle = 'rgba(90, 120, 80, 0.45)';
+    ctx.font = '12px "Segoe UI", sans-serif';
+    ctx.fillText(playerName, 20 + scoreWidth + 10, 35);
+  }
 
   ctx.font = '16px "Segoe UI", sans-serif';
   ctx.fillStyle = '#6B8A5E';
@@ -736,15 +968,15 @@ export function drawUI(context: CanvasContext, gameState: GameState, leaderboard
   let labelOffset: number;
 
   if (isSmallScreen) {
-    // Top right corner on small screens with generous spacing
+    // Top right corner on small screens, below the sun/moon toggle
     previewX = width - 55;
-    previewY = 70;
-    labelOffset = 48; // More space above for label
+    previewY = 130;
+    labelOffset = 45;
   } else {
     // Left of container on larger screens
     previewX = container.x - 50;
     previewY = container.y + 50;
-    labelOffset = 30;
+    labelOffset = 45;
   }
 
   ctx.fillStyle = '#4A6741';
@@ -782,7 +1014,7 @@ export function drawUI(context: CanvasContext, gameState: GameState, leaderboard
 
   // Draw progression wheel on the right (only on larger screens)
   if (!isSmallScreen) {
-    drawProgressionWheel(context, container, nextTier);
+    drawProgressionWheel(context, container, nextTier, mouseX, mouseY);
   }
 
   // Draw leaderboard on the left (with vertical fade near container)
@@ -862,6 +1094,131 @@ export function drawDropPreview(context: CanvasContext, x: number, tier: number,
   ctx.globalAlpha = 1;
 }
 
+function drawCherryBlossoms(ctx: CanvasRenderingContext2D): void {
+  for (const b of cherryBlossoms) {
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.rotate(b.rotation);
+    ctx.globalAlpha = b.opacity;
+
+    // Draw a simple cherry blossom (5 petals)
+    ctx.fillStyle = '#FFB7C5';
+    for (let i = 0; i < 5; i++) {
+      ctx.beginPath();
+      ctx.ellipse(0, -b.size * 0.6, b.size * 0.35, b.size * 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.rotate(Math.PI * 2 / 5);
+    }
+
+    // Center
+    ctx.fillStyle = '#FFE4E8';
+    ctx.beginPath();
+    ctx.arc(0, 0, b.size * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawWalkingCat(ctx: CanvasRenderingContext2D): void {
+  if (!walkingCat.active || catFrameWidth === 0) return;
+
+  const { x, y, direction, frame } = walkingCat;
+
+  // Calculate current frame (loop through 12 frames)
+  const currentFrame = Math.floor(frame) % CAT_FRAMES;
+  const sourceX = currentFrame * catFrameWidth;
+
+  // Scale for display (adjust as needed)
+  const scale = 2;
+  const displayWidth = catFrameWidth * scale;
+  const displayHeight = catFrameHeight * scale;
+
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Sprite is right-to-left, so flip when going right
+  if (direction > 0) {
+    ctx.scale(-1, 1);
+  }
+
+  // Draw the current frame (centered)
+  ctx.drawImage(
+    catSprite,
+    sourceX, 0, catFrameWidth, catFrameHeight, // Source rectangle
+    -displayWidth / 2, -displayHeight / 2, displayWidth, displayHeight // Destination rectangle
+  );
+
+  ctx.restore();
+}
+
+function drawMoon(ctx: CanvasRenderingContext2D, width: number, nightMode: boolean): void {
+  const moonX = width - 35;
+  const moonY = 35;
+
+  ctx.save();
+
+  if (nightMode) {
+    // Glowing moon at night
+    const glow = ctx.createRadialGradient(moonX, moonY, 8, moonX, moonY, 30);
+    glow.addColorStop(0, 'rgba(255, 250, 220, 0.4)');
+    glow.addColorStop(1, 'rgba(255, 250, 220, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, 30, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Moon
+    ctx.fillStyle = '#FFF8E0';
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, 16, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Moon craters
+    ctx.fillStyle = 'rgba(200, 190, 160, 0.3)';
+    ctx.beginPath();
+    ctx.arc(moonX - 5, moonY - 3, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(moonX + 4, moonY + 5, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Zzz
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.font = '10px "Segoe UI", sans-serif';
+    ctx.fillText('z', moonX + 18, moonY - 12);
+    ctx.font = '12px "Segoe UI", sans-serif';
+    ctx.fillText('z', moonX + 24, moonY - 20);
+    ctx.font = '14px "Segoe UI", sans-serif';
+    ctx.fillText('z', moonX + 32, moonY - 30);
+  } else {
+    // Sun during day
+    ctx.fillStyle = 'rgba(255, 220, 100, 0.3)';
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, 22, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#FFE082';
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, 14, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Sun rays
+    ctx.strokeStyle = 'rgba(255, 200, 50, 0.5)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(moonX + Math.cos(angle) * 18, moonY + Math.sin(angle) * 18);
+      ctx.lineTo(moonX + Math.cos(angle) * 24, moonY + Math.sin(angle) * 24);
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
 export function render(
   context: CanvasContext,
   mochis: Mochi[],
@@ -871,7 +1228,7 @@ export function render(
 ): void {
   context.ctx.setTransform(context.dpr, 0, 0, context.dpr, 0, 0);
 
-  clearCanvas(context);
+  clearCanvas(context, gameState.nightMode);
   drawContainer(context, gameState.container);
 
   // Draw drop preview
@@ -882,12 +1239,21 @@ export function render(
   // Draw effects behind mochi
   drawEffects(context.ctx);
 
+  // Draw cherry blossoms (behind mochi)
+  drawCherryBlossoms(context.ctx);
+
   // Sort and draw mochi
   const sorted = [...mochis].sort((a, b) => a.cy - b.cy);
   for (const mochi of sorted) {
     drawMochi(context, mochi);
   }
 
+  // Draw walking cat (in front of mochi)
+  drawWalkingCat(context.ctx);
+
   // Draw UI on top
   drawUI(context, gameState, leaderboard, playerName);
+
+  // Draw moon/sun toggle
+  drawMoon(context.ctx, context.width, gameState.nightMode);
 }

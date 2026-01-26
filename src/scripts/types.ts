@@ -81,6 +81,32 @@ export interface GameState {
   dropX: number;
   canDrop: boolean;
   container: Container;
+  mouseX: number;
+  mouseY: number;
+  // Easter egg states
+  nightMode: boolean;
+  lastInteraction: number;
+  easterEggActive: string | null;
+  easterEggTimer: number;
+}
+
+export interface CherryBlossom {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  rotation: number;
+  rotationSpeed: number;
+  size: number;
+  opacity: number;
+}
+
+export interface WalkingCat {
+  x: number;
+  y: number;
+  direction: number;
+  frame: number;
+  active: boolean;
 }
 
 export interface Container {
