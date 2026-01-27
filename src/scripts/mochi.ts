@@ -1,6 +1,6 @@
 import type { Mochi, CanvasContext, GameState, Container } from './types';
 import { createMochi, updateMochi, checkMochiCollision, canMerge, mochiTiers, defaultConfig, getRandomDroppableTier } from './physics';
-import { createCanvasContext, resizeCanvas, render, addMergeEffect, addImpactStars, addCherryBlossoms, triggerCatWalk, updateEasterEggs, isCatWalking } from './renderer';
+import { createCanvasContext, resizeCanvas, render, addMergeEffect, addCherryBlossoms, triggerCatWalk, updateEasterEggs, isCatWalking } from './renderer';
 import { initLeaderboard, getLeaderboard, getOrCreatePlayerName, submitScore } from './leaderboard';
 
 let context: CanvasContext;
@@ -205,12 +205,6 @@ function update(dt: number): void {
       // Decrement settle timer (grace period for game over)
       if (mochi.settleTimer > 0) {
         mochi.settleTimer -= dt;
-      }
-
-      // Spawn impact stars on floor hit
-      if (mochi.impactVelocity > 5) {
-        const impactY = container.y + container.height - container.wallThickness;
-        addImpactStars(mochi.cx, impactY, mochi.impactVelocity, mochi.color.primary);
       }
 
       // Decay impact velocity
