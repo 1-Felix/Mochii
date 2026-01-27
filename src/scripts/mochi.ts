@@ -367,12 +367,13 @@ function handleClick(e: MouseEvent): void {
   const y = e.clientY - rect.top;
   gameState.lastInteraction = Date.now();
 
-  // Check for moon click (top right area)
+  // Check for moon click (top right area, lower on mobile for accessibility)
+  const isMobile = context.width < 500 || context.height < 700;
   const moonX = context.width - 35;
-  const moonY = 35;
+  const moonY = isMobile ? 55 : 35;
   const dx = x - moonX;
   const dy = y - moonY;
-  if (Math.sqrt(dx * dx + dy * dy) < 25) {
+  if (Math.sqrt(dx * dx + dy * dy) < 30) { // Larger tap target
     gameState.nightMode = !gameState.nightMode;
     if (gameState.nightMode) {
       // Make mochi sleepy in night mode

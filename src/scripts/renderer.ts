@@ -120,33 +120,41 @@ export function clearCanvas(context: CanvasContext, nightMode: boolean = false):
   const { ctx, width, height } = context;
 
   if (nightMode) {
-    // Cozy night mode gradient
+    // Cozy blue night mode gradient
     const gradient = ctx.createLinearGradient(0, 0, 0, height);
-    gradient.addColorStop(0, "#2A3A4A"); // Deep night blue
-    gradient.addColorStop(0.5, "#1E2D3D"); // Darker blue
-    gradient.addColorStop(1, "#152535"); // Deep night
+    gradient.addColorStop(0, "#1a2a4a"); // Deep night blue
+    gradient.addColorStop(0.5, "#162040"); // Darker blue
+    gradient.addColorStop(1, "#0f1628"); // Deep night
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
 
-    // Stars
-    ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
-    for (let i = 0; i < 30; i++) {
-      const starX = (i * 137) % width;
-      const starY = (i * 89) % (height * 0.4);
-      const size = 1 + (i % 3);
+    // Twinkling stars with animation
+    const time = Date.now() * 0.001;
+    for (let i = 0; i < 40; i++) {
+      const starX = (i * 137 + 20) % width;
+      const starY = (i * 89 + 10) % (height * 0.6);
+      const twinkle = 0.4 + 0.6 * Math.sin(time * (1.5 + (i % 5) * 0.3) + i);
+      const size = 1 + (i % 2) * 0.5;
+      ctx.fillStyle = `rgba(255, 255, 255, ${twinkle * 0.8})`;
       ctx.beginPath();
       ctx.arc(starX, starY, size, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Soft texture
-    ctx.fillStyle = "rgba(100, 120, 150, 0.03)";
-    for (let i = 0; i < width; i += 20) {
-      for (let j = 0; j < height; j += 20) {
-        if ((i + j) % 40 === 0) {
-          ctx.fillRect(i, j, 10, 10);
-        }
-      }
+    // Golden accent stars - larger and brighter
+    for (let i = 0; i < 8; i++) {
+      const starX = (i * 193 + 80) % width;
+      const starY = (i * 67 + 40) % (height * 0.45);
+      const twinkle = 0.6 + 0.4 * Math.sin(time * 2 + i * 1.5);
+      ctx.fillStyle = `rgba(255, 220, 120, ${twinkle})`;
+      ctx.beginPath();
+      ctx.arc(starX, starY, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      // Star glow
+      ctx.fillStyle = `rgba(255, 220, 120, ${twinkle * 0.3})`;
+      ctx.beginPath();
+      ctx.arc(starX, starY, 5, 0, Math.PI * 2);
+      ctx.fill();
     }
   } else {
     // Matcha-inspired gradient background
@@ -169,71 +177,139 @@ export function clearCanvas(context: CanvasContext, nightMode: boolean = false):
   }
 }
 
-export function drawContainer(context: CanvasContext, container: Container): void {
+export function drawContainer(context: CanvasContext, container: Container, nightMode: boolean = false): void {
   const { ctx } = context;
   const { x, y, width, height, wallThickness, overflowLine } = container;
 
-  // Container shadow (softer, green-tinted)
-  ctx.fillStyle = "rgba(60, 80, 50, 0.15)";
-  ctx.beginPath();
-  ctx.roundRect(x + 4, y + 4, width, height, 12);
-  ctx.fill();
+  if (nightMode) {
+    // Night mode - cozy wooden container with warm lighting
 
-  // Container background (inside) - soft matcha green
-  const innerGradient = ctx.createLinearGradient(x, y, x, y + height);
-  innerGradient.addColorStop(0, "rgba(220, 235, 210, 0.85)");
-  innerGradient.addColorStop(1, "rgba(200, 220, 190, 0.9)");
-  ctx.fillStyle = innerGradient;
-  ctx.beginPath();
-  ctx.roundRect(x + wallThickness, y, width - wallThickness * 2, height - wallThickness, 8);
-  ctx.fill();
+    // Warm shadow
+    ctx.fillStyle = "rgba(20, 15, 30, 0.3)";
+    ctx.beginPath();
+    ctx.roundRect(x + 4, y + 4, width, height, 12);
+    ctx.fill();
 
-  // Container walls - natural bamboo/wood green
-  const wallGradient = ctx.createLinearGradient(x, y, x + wallThickness, y);
-  wallGradient.addColorStop(0, "#7A9B6D"); // Bamboo green
-  wallGradient.addColorStop(0.5, "#8DAA7F");
-  wallGradient.addColorStop(1, "#7A9B6D");
+    // Container background - cozy dark blue with warm tint
+    const innerGradient = ctx.createLinearGradient(x, y, x, y + height);
+    innerGradient.addColorStop(0, "rgba(35, 45, 65, 0.9)");
+    innerGradient.addColorStop(1, "rgba(25, 35, 55, 0.95)");
+    ctx.fillStyle = innerGradient;
+    ctx.beginPath();
+    ctx.roundRect(x + wallThickness, y, width - wallThickness * 2, height - wallThickness, 8);
+    ctx.fill();
 
-  ctx.fillStyle = wallGradient;
-  ctx.strokeStyle = "#5C7A52";
-  ctx.lineWidth = 2;
+    // Cozy warm wood walls
+    const wallGradient = ctx.createLinearGradient(x, y, x + wallThickness, y);
+    wallGradient.addColorStop(0, "#5D4E3C"); // Dark warm wood
+    wallGradient.addColorStop(0.5, "#6B5A47");
+    wallGradient.addColorStop(1, "#5D4E3C");
 
-  // Left wall
-  ctx.beginPath();
-  ctx.roundRect(x, y, wallThickness, height, [12, 0, 0, 12]);
-  ctx.fill();
-  ctx.stroke();
+    ctx.fillStyle = wallGradient;
+    ctx.strokeStyle = "#4A3D2E";
+    ctx.lineWidth = 2;
 
-  // Right wall
-  const rightWallGradient = ctx.createLinearGradient(x + width - wallThickness, y, x + width, y);
-  rightWallGradient.addColorStop(0, "#7A9B6D");
-  rightWallGradient.addColorStop(0.5, "#8DAA7F");
-  rightWallGradient.addColorStop(1, "#7A9B6D");
-  ctx.fillStyle = rightWallGradient;
-  ctx.beginPath();
-  ctx.roundRect(x + width - wallThickness, y, wallThickness, height, [0, 12, 12, 0]);
-  ctx.fill();
-  ctx.stroke();
+    // Left wall
+    ctx.beginPath();
+    ctx.roundRect(x, y, wallThickness, height, [12, 0, 0, 12]);
+    ctx.fill();
+    ctx.stroke();
 
-  // Bottom wall
-  const bottomWallGradient = ctx.createLinearGradient(x, y + height - wallThickness, x, y + height);
-  bottomWallGradient.addColorStop(0, "#8DAA7F");
-  bottomWallGradient.addColorStop(1, "#6B8A5E");
-  ctx.fillStyle = bottomWallGradient;
-  ctx.beginPath();
-  ctx.roundRect(x, y + height - wallThickness, width, wallThickness, [0, 0, 12, 12]);
-  ctx.fill();
-  ctx.stroke();
+    // Right wall
+    const rightWallGradient = ctx.createLinearGradient(x + width - wallThickness, y, x + width, y);
+    rightWallGradient.addColorStop(0, "#5D4E3C");
+    rightWallGradient.addColorStop(0.5, "#6B5A47");
+    rightWallGradient.addColorStop(1, "#5D4E3C");
+    ctx.fillStyle = rightWallGradient;
+    ctx.beginPath();
+    ctx.roundRect(x + width - wallThickness, y, wallThickness, height, [0, 12, 12, 0]);
+    ctx.fill();
+    ctx.stroke();
 
-  // Danger line (softer, matcha-tinted red)
-  ctx.strokeStyle = "rgba(180, 90, 90, 0.5)";
-  ctx.lineWidth = 2;
-  ctx.setLineDash([8, 8]);
-  ctx.beginPath();
-  ctx.moveTo(x + wallThickness, overflowLine);
-  ctx.lineTo(x + width - wallThickness, overflowLine);
-  ctx.stroke();
-  ctx.setLineDash([]);
+    // Bottom wall
+    const bottomWallGradient = ctx.createLinearGradient(x, y + height - wallThickness, x, y + height);
+    bottomWallGradient.addColorStop(0, "#6B5A47");
+    bottomWallGradient.addColorStop(1, "#4A3D2E");
+    ctx.fillStyle = bottomWallGradient;
+    ctx.beginPath();
+    ctx.roundRect(x, y + height - wallThickness, width, wallThickness, [0, 0, 12, 12]);
+    ctx.fill();
+    ctx.stroke();
+
+    // Danger line - soft amber glow
+    ctx.strokeStyle = "rgba(255, 180, 100, 0.4)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 8]);
+    ctx.beginPath();
+    ctx.moveTo(x + wallThickness, overflowLine);
+    ctx.lineTo(x + width - wallThickness, overflowLine);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  } else {
+    // Day mode - original matcha green
+
+    // Container shadow (softer, green-tinted)
+    ctx.fillStyle = "rgba(60, 80, 50, 0.15)";
+    ctx.beginPath();
+    ctx.roundRect(x + 4, y + 4, width, height, 12);
+    ctx.fill();
+
+    // Container background (inside) - soft matcha green
+    const innerGradient = ctx.createLinearGradient(x, y, x, y + height);
+    innerGradient.addColorStop(0, "rgba(220, 235, 210, 0.85)");
+    innerGradient.addColorStop(1, "rgba(200, 220, 190, 0.9)");
+    ctx.fillStyle = innerGradient;
+    ctx.beginPath();
+    ctx.roundRect(x + wallThickness, y, width - wallThickness * 2, height - wallThickness, 8);
+    ctx.fill();
+
+    // Container walls - natural bamboo/wood green
+    const wallGradient = ctx.createLinearGradient(x, y, x + wallThickness, y);
+    wallGradient.addColorStop(0, "#7A9B6D"); // Bamboo green
+    wallGradient.addColorStop(0.5, "#8DAA7F");
+    wallGradient.addColorStop(1, "#7A9B6D");
+
+    ctx.fillStyle = wallGradient;
+    ctx.strokeStyle = "#5C7A52";
+    ctx.lineWidth = 2;
+
+    // Left wall
+    ctx.beginPath();
+    ctx.roundRect(x, y, wallThickness, height, [12, 0, 0, 12]);
+    ctx.fill();
+    ctx.stroke();
+
+    // Right wall
+    const rightWallGradient = ctx.createLinearGradient(x + width - wallThickness, y, x + width, y);
+    rightWallGradient.addColorStop(0, "#7A9B6D");
+    rightWallGradient.addColorStop(0.5, "#8DAA7F");
+    rightWallGradient.addColorStop(1, "#7A9B6D");
+    ctx.fillStyle = rightWallGradient;
+    ctx.beginPath();
+    ctx.roundRect(x + width - wallThickness, y, wallThickness, height, [0, 12, 12, 0]);
+    ctx.fill();
+    ctx.stroke();
+
+    // Bottom wall
+    const bottomWallGradient = ctx.createLinearGradient(x, y + height - wallThickness, x, y + height);
+    bottomWallGradient.addColorStop(0, "#8DAA7F");
+    bottomWallGradient.addColorStop(1, "#6B8A5E");
+    ctx.fillStyle = bottomWallGradient;
+    ctx.beginPath();
+    ctx.roundRect(x, y + height - wallThickness, width, wallThickness, [0, 0, 12, 12]);
+    ctx.fill();
+    ctx.stroke();
+
+    // Danger line (softer, matcha-tinted red)
+    ctx.strokeStyle = "rgba(180, 90, 90, 0.5)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 8]);
+    ctx.beginPath();
+    ctx.moveTo(x + wallThickness, overflowLine);
+    ctx.lineTo(x + width - wallThickness, overflowLine);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
 }
 
 // Chaikin smoothing for organic shapes
@@ -1253,30 +1329,51 @@ function drawWalkingCat(ctx: CanvasRenderingContext2D): void {
   ctx.restore();
 }
 
-function drawMoon(ctx: CanvasRenderingContext2D, width: number, nightMode: boolean): void {
+function drawMoon(ctx: CanvasRenderingContext2D, width: number, height: number, nightMode: boolean): void {
+  const isMobile = width < 500 || height < 700;
   const moonX = width - 35;
-  const moonY = 35;
+  const moonY = isMobile ? 55 : 35; // Lower on mobile for easier tap
 
   ctx.save();
 
   if (nightMode) {
-    // Glowing moon at night
-    const glow = ctx.createRadialGradient(moonX, moonY, 8, moonX, moonY, 30);
-    glow.addColorStop(0, "rgba(255, 250, 220, 0.4)");
-    glow.addColorStop(1, "rgba(255, 250, 220, 0)");
+    // Bright moon glow
+    const glow = ctx.createRadialGradient(moonX, moonY, 8, moonX, moonY, 45);
+    glow.addColorStop(0, "rgba(255, 255, 240, 0.6)");
+    glow.addColorStop(0.5, "rgba(200, 220, 255, 0.2)");
+    glow.addColorStop(1, "rgba(150, 180, 255, 0)");
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(moonX, moonY, 30, 0, Math.PI * 2);
+    ctx.arc(moonX, moonY, 45, 0, Math.PI * 2);
     ctx.fill();
 
-    // Moon
-    ctx.fillStyle = "#FFF8E0";
+    // Hazy clouds drifting across moon
+    const time = Date.now() * 0.0003;
+    ctx.globalAlpha = 0.4;
+    for (let i = 0; i < 3; i++) {
+      const cloudOffset = Math.sin(time + i * 2) * 15;
+      const cloudY = moonY - 5 + i * 8;
+      const cloudGradient = ctx.createRadialGradient(
+        moonX + cloudOffset, cloudY, 5,
+        moonX + cloudOffset, cloudY, 25 + i * 5
+      );
+      cloudGradient.addColorStop(0, "rgba(180, 200, 220, 0.6)");
+      cloudGradient.addColorStop(1, "rgba(100, 130, 160, 0)");
+      ctx.fillStyle = cloudGradient;
+      ctx.beginPath();
+      ctx.ellipse(moonX + cloudOffset, cloudY, 30 + i * 8, 12 + i * 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Shining moon
+    ctx.fillStyle = "#FFFEF5";
     ctx.beginPath();
     ctx.arc(moonX, moonY, 16, 0, Math.PI * 2);
     ctx.fill();
 
-    // Moon craters
-    ctx.fillStyle = "rgba(200, 190, 160, 0.3)";
+    // Moon craters - subtle
+    ctx.fillStyle = "rgba(200, 210, 220, 0.3)";
     ctx.beginPath();
     ctx.arc(moonX - 5, moonY - 3, 4, 0, Math.PI * 2);
     ctx.fill();
@@ -1285,7 +1382,7 @@ function drawMoon(ctx: CanvasRenderingContext2D, width: number, nightMode: boole
     ctx.fill();
 
     // Zzz
-    ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+    ctx.fillStyle = "rgba(200, 220, 255, 0.7)";
     ctx.font = '10px "Segoe UI", sans-serif';
     ctx.fillText("z", moonX + 18, moonY - 12);
     ctx.font = '12px "Segoe UI", sans-serif';
@@ -1329,7 +1426,7 @@ export function render(
   context.ctx.setTransform(context.dpr, 0, 0, context.dpr, 0, 0);
 
   clearCanvas(context, gameState.nightMode);
-  drawContainer(context, gameState.container);
+  drawContainer(context, gameState.container, gameState.nightMode);
 
   // Draw drop preview
   if (gameState.canDrop && !gameState.gameOver) {
@@ -1360,5 +1457,5 @@ export function render(
   drawUI(context, gameState, leaderboard, playerName);
 
   // Draw moon/sun toggle
-  drawMoon(context.ctx, context.width, gameState.nightMode);
+  drawMoon(context.ctx, context.width, context.height, gameState.nightMode);
 }
