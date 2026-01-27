@@ -1,7 +1,8 @@
-import type { Mochi, CanvasContext, GameState, Container } from './types';
-import { createMochi, updateMochi, checkMochiCollision, canMerge, mochiTiers, defaultConfig, getRandomDroppableTier } from './physics';
-import { createCanvasContext, resizeCanvas, render, addMergeEffect, addCherryBlossoms, triggerCatWalk, updateEasterEggs, isCatWalking, initAmbientEffects, addDustPoof } from './renderer';
-import { initLeaderboard, getLeaderboard, getOrCreatePlayerName, submitScore } from './leaderboard';
+import type { Mochi, CanvasContext, GameState, Container, GameMode } from './types';
+import { createMochi, updateMochi, checkMochiCollision, canMerge, mochiTiers, defaultConfig, DROPPABLE_TIERS } from './physics';
+import { createCanvasContext, resizeCanvas, render, addMergeEffect, addCherryBlossoms, triggerCatWalk, updateEasterEggs, isCatWalking, initAmbientEffects, addDustPoof, MODE_TOGGLE_BOUNDS } from './renderer';
+import { initLeaderboard, getLeaderboard, getOrCreatePlayerName, submitScore, setLeaderboardMode, fetchLeaderboard } from './leaderboard';
+import { createSeededRandom, loadDailyChallenge, saveDailyChallenge, createTodayChallenge, generateShareText, copyToClipboard, getDayNumber, getTodayString } from './daily';
 
 let context: CanvasContext;
 let mochis: Mochi[] = [];
@@ -10,6 +11,15 @@ let animationId: number;
 let lastTime = 0;
 let dropCooldown = 0;
 let playerName: string;
+
+// Seeded random function for daily mode
+let seededRandom: (() => number) | null = null;
+
+// Get a random droppable tier (uses seeded random in daily mode)
+function getNextTier(): number {
+  const rand = gameState?.gameMode === 'daily' && seededRandom ? seededRandom() : Math.random();
+  return DROPPABLE_TIERS[Math.floor(rand * DROPPABLE_TIERS.length)];
+}
 
 // Sound management - Pentatonic scale for gentle plop sounds
 // Higher pitch for small mochi, lower for large (reversed order)
@@ -107,32 +117,68 @@ function createContainer(width: number, height: number): Container {
   };
 }
 
-function initGameState(): void {
+function initGameState(mode: GameMode = 'daily'): void {
   const container = createContainer(context.width, context.height);
+
+  // Set up seeded random for daily mode
+  let dailyChallenge = null;
+  if (mode === 'daily') {
+    // Check if already played today
+    const existing = loadDailyChallenge();
+    if (existing?.played) {
+      // Already played today - show results instead
+      dailyChallenge = existing;
+    } else {
+      // New daily challenge
+      dailyChallenge = existing ?? createTodayChallenge();
+      seededRandom = createSeededRandom(dailyChallenge.seed);
+    }
+  } else {
+    seededRandom = null;
+  }
+
+  // Store previous night mode preference
+  const wasNightMode = gameState?.nightMode ?? false;
+  const wasSoundEnabled = gameState?.soundEnabled ?? true;
+
   gameState = {
     score: 0,
     highScore: parseInt(localStorage.getItem('mochiHighScore') || '0'),
-    gameOver: false,
+    gameOver: dailyChallenge?.played ?? false, // Show game over if already played
     currentMochi: null,
-    currentTier: getRandomDroppableTier(), // What player is about to drop
-    nextTier: getRandomDroppableTier(), // What's shown in "next" preview
+    currentTier: getNextTier(), // What player is about to drop
+    nextTier: getNextTier(), // What's shown in "next" preview
     dropX: container.x + container.width / 2,
-    canDrop: true,
+    canDrop: !dailyChallenge?.played,
     container,
     mouseX: 0,
     mouseY: 0,
     // Easter eggs
-    nightMode: false,
+    nightMode: wasNightMode,
     lastInteraction: Date.now(),
     easterEggActive: null,
     easterEggTimer: 0,
     // Sound
-    soundEnabled: true,
+    soundEnabled: wasSoundEnabled,
+    // Game mode
+    gameMode: mode,
+    dailyChallenge,
+    mergeCount: 0,
+    highestTierReached: 0,
   };
   mochis = [];
   dropCooldown = 0;
   konamiIndex = 0;
   typedChars = '';
+
+  // Set leaderboard mode and fetch appropriate leaderboard
+  const todayDate = getTodayString();
+  setLeaderboardMode(mode, todayDate);
+  if (mode === 'daily') {
+    fetchLeaderboard('daily', todayDate);
+  } else {
+    fetchLeaderboard('practice');
+  }
 }
 
 const DROP_COOLDOWN = 45; // Frames to wait between drops (~0.75 seconds)
@@ -164,7 +210,7 @@ function dropMochi(x: number): void {
 
   // Cycle tiers: current becomes next, next becomes new random
   gameState.currentTier = gameState.nextTier;
-  gameState.nextTier = getRandomDroppableTier();
+  gameState.nextTier = getNextTier();
   gameState.canDrop = false;
   dropCooldown = DROP_COOLDOWN;
 }
@@ -184,6 +230,12 @@ function mergeMochis(m1: Mochi, m2: Mochi): void {
   // Add score
   const points = mochiTiers[newTier].points;
   gameState.score += points;
+
+  // Track stats for daily challenge
+  gameState.mergeCount++;
+  if (newTier > gameState.highestTierReached) {
+    gameState.highestTierReached = newTier;
+  }
 
   // Update high score
   if (gameState.score > gameState.highScore) {
@@ -389,9 +441,21 @@ function update(dt: number): void {
   // Check game over
   if (checkGameOver()) {
     gameState.gameOver = true;
-    // Submit score to leaderboard
+    // Submit score to leaderboard with mode and date
     if (gameState.score > 0) {
-      submitScore(playerName, gameState.score);
+      const dailyDate = gameState.gameMode === 'daily' ? getTodayString() : undefined;
+      submitScore(playerName, gameState.score, gameState.gameMode, dailyDate);
+    }
+    // Save daily challenge result
+    if (gameState.gameMode === 'daily' && gameState.dailyChallenge && !gameState.dailyChallenge.played) {
+      gameState.dailyChallenge = {
+        ...gameState.dailyChallenge,
+        played: true,
+        score: gameState.score,
+        highestTier: gameState.highestTierReached,
+        mergeCount: gameState.mergeCount,
+      };
+      saveDailyChallenge(gameState.dailyChallenge);
     }
   }
 }
@@ -504,11 +568,38 @@ function triggerCatEasterEgg(): void {
   }
 }
 
+// Check if click is on mode toggle (position is dynamic based on score width)
+function isToggleClick(clickX: number, clickY: number): boolean {
+  // Calculate toggle position (must match renderer.ts)
+  const scoreText = `Score: ${gameState.score}`;
+  // Estimate score width (approximately 10px per character for bold 24px font)
+  const scoreWidth = scoreText.length * 10;
+  const toggleX = 20 + scoreWidth + 50;
+  const toggleY = 28;
+
+  const halfWidth = MODE_TOGGLE_BOUNDS.width / 2;
+  const halfHeight = MODE_TOGGLE_BOUNDS.height / 2;
+  return clickX >= toggleX - halfWidth && clickX <= toggleX + halfWidth &&
+         clickY >= toggleY - halfHeight && clickY <= toggleY + halfHeight;
+}
+
+// Handle mode toggle - switch between daily and free play
+function handleModeToggle(): void {
+  const newMode: GameMode = gameState.gameMode === 'daily' ? 'practice' : 'daily';
+  initGameState(newMode);
+}
+
 function handleClick(e: MouseEvent): void {
   const rect = context.canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
   gameState.lastInteraction = Date.now();
+
+  // Check for mode toggle click (top left area)
+  if (!gameState.gameOver && isToggleClick(x, y)) {
+    handleModeToggle();
+    return;
+  }
 
   // Check for speaker icon click (bottom right corner)
   const speakerX = context.width - 30;
@@ -545,8 +636,41 @@ function handleClick(e: MouseEvent): void {
   }
 
   if (gameState.gameOver) {
-    // Restart game
-    initGameState();
+    // Check which button was clicked on game over screen
+    const centerX = context.width / 2;
+    const centerY = context.height / 2;
+
+    // Button positions (must match renderer)
+    const dailyBtnY = centerY + 35;
+    const practiceBtnY = centerY + 70;
+    const shareBtnY = centerY + 105;
+    const btnWidth = 120;
+    const btnHeight = 28;
+
+    // Check Daily Challenge button
+    if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
+        y >= dailyBtnY - btnHeight/2 && y <= dailyBtnY + btnHeight/2) {
+      initGameState('daily');
+      return;
+    }
+
+    // Check Practice button
+    if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
+        y >= practiceBtnY - btnHeight/2 && y <= practiceBtnY + btnHeight/2) {
+      initGameState('practice');
+      return;
+    }
+
+    // Check Share button (only shown for daily mode)
+    if (gameState.gameMode === 'daily' && gameState.dailyChallenge) {
+      if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
+          y >= shareBtnY - btnHeight/2 && y <= shareBtnY + btnHeight/2) {
+        const shareText = generateShareText(gameState.dailyChallenge);
+        copyToClipboard(shareText);
+        return;
+      }
+    }
+
     return;
   }
 
@@ -571,6 +695,12 @@ function handleTouchEnd(e: TouchEvent): void {
   const touch = e.changedTouches[0];
   const x = touch ? touch.clientX - rect.left : gameState.dropX;
   const y = touch ? touch.clientY - rect.top : 0;
+
+  // Check for mode toggle tap (top left area)
+  if (!gameState.gameOver && isToggleClick(x, y)) {
+    handleModeToggle();
+    return;
+  }
 
   // Check for speaker icon tap (bottom right corner)
   const speakerX = context.width - 30;
@@ -605,7 +735,41 @@ function handleTouchEnd(e: TouchEvent): void {
   }
 
   if (gameState.gameOver) {
-    initGameState();
+    // Check which button was tapped on game over screen
+    const centerX = context.width / 2;
+    const centerY = context.height / 2;
+
+    // Button positions (must match renderer)
+    const dailyBtnY = centerY + 35;
+    const practiceBtnY = centerY + 70;
+    const shareBtnY = centerY + 105;
+    const btnWidth = 120;
+    const btnHeight = 28;
+
+    // Check Daily Challenge button
+    if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
+        y >= dailyBtnY - btnHeight/2 && y <= dailyBtnY + btnHeight/2) {
+      initGameState('daily');
+      return;
+    }
+
+    // Check Practice button
+    if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
+        y >= practiceBtnY - btnHeight/2 && y <= practiceBtnY + btnHeight/2) {
+      initGameState('practice');
+      return;
+    }
+
+    // Check Share button (only shown for daily mode)
+    if (gameState.gameMode === 'daily' && gameState.dailyChallenge) {
+      if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
+          y >= shareBtnY - btnHeight/2 && y <= shareBtnY + btnHeight/2) {
+        const shareText = generateShareText(gameState.dailyChallenge);
+        copyToClipboard(shareText);
+        return;
+      }
+    }
+
     return;
   }
   dropMochi(gameState.dropX);

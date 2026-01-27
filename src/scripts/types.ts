@@ -101,6 +101,11 @@ export interface GameState {
   easterEggTimer: number;
   // Sound state
   soundEnabled: boolean;
+  // Game mode
+  gameMode: GameMode;
+  dailyChallenge: DailyChallenge | null;
+  mergeCount: number; // Track merges for daily stats
+  highestTierReached: number; // Track highest tier for daily stats
 }
 
 export interface CherryBlossom {
@@ -182,4 +187,15 @@ export interface ImpactStar {
   scale: number;
   life: number;
   color: string;
+}
+
+export type GameMode = 'practice' | 'daily';
+
+export interface DailyChallenge {
+  date: string; // YYYY-MM-DD
+  seed: number;
+  played: boolean;
+  score: number;
+  highestTier: number;
+  mergeCount: number;
 }

@@ -11,6 +11,7 @@ import type {
 } from "./types";
 import { mochiTiers } from "./physics";
 import type { LeaderboardEntry } from "./leaderboard";
+import { getDayNumber, getTodayString } from "./daily";
 
 // Visual effects storage
 const mergeEffects: MergeEffect[] = [];
@@ -506,6 +507,30 @@ export function clearCanvas(context: CanvasContext, nightMode: boolean = false):
       ctx.fill();
     }
   }
+}
+
+// Draw big muted day number watermark for daily mode
+function drawDailyWatermark(ctx: CanvasRenderingContext2D, width: number, containerY: number, dayNumber: number, nightMode: boolean): void {
+  const text = `#${dayNumber}`;
+
+  // Large, soft watermark positioned above container, slightly overlapping top edge
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom"; // Align bottom of text to position
+  ctx.font = 'bold 200px "Segoe UI", sans-serif';
+
+  // Gentle but visible - serves as the day indicator
+  if (nightMode) {
+    ctx.fillStyle = "rgba(255, 255, 255, 0.07)";
+  } else {
+    ctx.fillStyle = "rgba(60, 100, 50, 0.12)";
+  }
+
+  // Position so bottom of text overlaps top of container by ~40px
+  const watermarkY = containerY + 40;
+  ctx.fillText(text, width / 2, watermarkY);
+
+  ctx.restore();
 }
 
 export function drawContainer(context: CanvasContext, container: Container, nightMode: boolean = false): void {
@@ -1488,8 +1513,9 @@ function drawLeaderboard(
   const { ctx } = context;
 
   const panelX = 20;
-  const panelY = 85;
+  const panelY = 100; // Below score/name/best area
   const panelWidth = 180;
+  const maxEntries = 5;
 
   // Calculate fade zone - start fading 40px before container top
   const fadeStartY = container.y - 40;
@@ -1502,10 +1528,10 @@ function drawLeaderboard(
     return 1 - (y - fadeStartY) / (fadeEndY - fadeStartY);
   };
 
-  // Subtle title - blends with background
+  // Title
   const titleOpacity = getYOpacity(panelY);
   if (titleOpacity > 0) {
-    ctx.fillStyle = `rgba(90, 120, 80, ${0.5 * titleOpacity})`;
+    ctx.fillStyle = `rgba(60, 90, 50, ${0.65 * titleOpacity})`;
     ctx.font = '13px "Segoe UI", sans-serif';
     ctx.textAlign = "left";
     ctx.fillText("Leaderboard", panelX, panelY);
@@ -1519,23 +1545,70 @@ function drawLeaderboard(
     const opacity2 = getYOpacity(emptyY2);
 
     if (opacity1 > 0) {
-      ctx.fillStyle = `rgba(90, 120, 80, ${0.4 * opacity1})`;
+      ctx.fillStyle = `rgba(60, 90, 50, ${0.55 * opacity1})`;
       ctx.font = '13px "Segoe UI", sans-serif';
       ctx.fillText("no scores yet...", panelX, emptyY1);
     }
     if (opacity2 > 0) {
-      ctx.fillStyle = `rgba(90, 120, 80, ${0.4 * opacity2})`;
-      ctx.fillText("be the first! ♡", panelX, emptyY2);
+      ctx.fillStyle = `rgba(60, 90, 50, ${0.55 * opacity2})`;
+      ctx.fillText("be the first!", panelX, emptyY2);
     }
   } else {
-    for (let i = 0; i < Math.min(10, leaderboard.length); i++) {
-      const entry = leaderboard[i];
-      const y = panelY + 26 + i * 26;
-      const isPlayer = entry.name === playerName;
+    // Find player's rank in full leaderboard
+    const playerRank = leaderboard.findIndex(e => e.name === playerName);
+    const playerInTop = playerRank >= 0 && playerRank < maxEntries - 1; // Top 4
+
+    // Build display list: top entries + player if not in top
+    const displayEntries: { entry: LeaderboardEntry; rank: number; isPlayer: boolean; showGap: boolean }[] = [];
+
+    // How many top entries to show
+    const topCount = playerInTop ? maxEntries : maxEntries - 1;
+
+    for (let i = 0; i < Math.min(topCount, leaderboard.length); i++) {
+      displayEntries.push({
+        entry: leaderboard[i],
+        rank: i + 1,
+        isPlayer: leaderboard[i].name === playerName,
+        showGap: false,
+      });
+    }
+
+    // Add player's entry if not in top entries
+    if (!playerInTop && playerRank >= 0) {
+      displayEntries.push({
+        entry: leaderboard[playerRank],
+        rank: playerRank + 1,
+        isPlayer: true,
+        showGap: playerRank > topCount, // Show "..." gap if there's a gap
+      });
+    }
+
+    let yOffset = 0;
+    for (let i = 0; i < displayEntries.length; i++) {
+      const { entry, rank, isPlayer, showGap } = displayEntries[i];
+
+      // Show gap indicator before player's entry if needed
+      if (showGap) {
+        const gapY = panelY + 26 + yOffset * 26;
+        const gapOpacity = getYOpacity(gapY);
+        if (gapOpacity > 0) {
+          ctx.fillStyle = `rgba(60, 90, 50, ${0.45 * gapOpacity})`;
+          ctx.font = '12px "Segoe UI", sans-serif';
+          ctx.textAlign = "center";
+          ctx.fillText("···", panelX + panelWidth / 2, gapY);
+          ctx.textAlign = "left";
+        }
+        yOffset++;
+      }
+
+      const y = panelY + 26 + yOffset * 26;
       const yOpacity = getYOpacity(y);
 
       // Skip if fully faded
-      if (yOpacity <= 0) continue;
+      if (yOpacity <= 0) {
+        yOffset++;
+        continue;
+      }
 
       // Subtle highlight for player's entry
       if (isPlayer && yOpacity > 0) {
@@ -1545,20 +1618,22 @@ function drawLeaderboard(
         ctx.fill();
       }
 
-      // Rank - very subtle
-      const baseOpacity = isPlayer ? 0.7 : 0.4 - i * 0.02;
-      ctx.fillStyle = `rgba(70, 100, 60, ${baseOpacity * yOpacity})`;
+      // Rank - more visible
+      const baseOpacity = isPlayer ? 0.85 : 0.6;
+      ctx.fillStyle = `rgba(60, 90, 50, ${baseOpacity * yOpacity})`;
       ctx.font = isPlayer ? '600 14px "Segoe UI", sans-serif' : '14px "Segoe UI", sans-serif';
       ctx.textAlign = "left";
-      ctx.fillText(`${i + 1}`, panelX, y);
+      ctx.fillText(`${rank}`, panelX, y);
 
       // Name (truncated)
-      const displayName = entry.name.length > 14 ? entry.name.slice(0, 13) + "…" : entry.name;
-      ctx.fillText(displayName, panelX + 22, y);
+      const displayName = entry.name.length > 12 ? entry.name.slice(0, 11) + "…" : entry.name;
+      ctx.fillText(displayName, panelX + 26, y);
 
       // Score - aligned right
       ctx.textAlign = "right";
       ctx.fillText(entry.score.toString(), panelX + panelWidth - 10, y);
+
+      yOffset++;
     }
   }
 
@@ -1585,17 +1660,25 @@ export function drawUI(
   const scoreText = `Score: ${score}`;
   ctx.fillText(scoreText, 20, 35);
 
-  // Player name - very subtle, to the right of score
+  // Mode toggle switch (next to score on first line)
+  const { gameMode, dailyChallenge } = gameState;
+  const scoreWidth = ctx.measureText(scoreText).width;
+  const toggleX = 20 + scoreWidth + 50; // After score with some spacing
+  const toggleY = 28;
+  drawModeToggle(ctx, toggleX, toggleY, gameMode === 'daily', gameState.nightMode);
+
+  // Player name - underneath the score
   if (playerName) {
-    const scoreWidth = ctx.measureText(scoreText).width;
-    ctx.fillStyle = "rgba(90, 120, 80, 0.45)";
+    ctx.fillStyle = "rgba(90, 120, 80, 0.5)";
     ctx.font = '12px "Segoe UI", sans-serif';
-    ctx.fillText(playerName, 20 + scoreWidth + 10, 35);
+    ctx.fillText(playerName, 20, 52);
   }
 
+  // Best score
   ctx.font = '16px "Segoe UI", sans-serif';
   ctx.fillStyle = "#6B8A5E";
-  ctx.fillText(`Best: ${highScore}`, 20, 58);
+  ctx.fillText(`Best: ${highScore}`, 20, 72);
+
 
   // Next mochi preview - position changes based on screen size
   let previewX: number;
@@ -1657,33 +1740,74 @@ export function drawUI(
 
   // Game over overlay - matcha themed
   if (gameOver) {
+    const { gameMode, dailyChallenge } = gameState;
+
     // Semi-transparent matcha overlay
     ctx.fillStyle = "rgba(60, 80, 50, 0.75)";
     ctx.fillRect(0, 0, width, context.height);
 
-    // Decorative panel
+    // Decorative panel - taller to fit buttons
     const panelX = width / 2;
     const panelY = context.height / 2;
+    const panelHeight = gameMode === 'daily' ? 240 : 200;
     ctx.fillStyle = "rgba(230, 240, 225, 0.95)";
     ctx.strokeStyle = "#7A9B6D";
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.roundRect(panelX - 150, panelY - 80, 300, 180, 16);
+    ctx.roundRect(panelX - 150, panelY - 80, 300, panelHeight, 16);
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = "#3D5A3A";
-    ctx.font = 'bold 36px "Segoe UI", sans-serif';
     ctx.textAlign = "center";
-    ctx.fillText("Game Over", panelX, panelY - 30);
 
+    // Title - show day number for daily mode
+    ctx.fillStyle = "#3D5A3A";
+    if (gameMode === 'daily' && dailyChallenge) {
+      const dayNum = getDayNumber(dailyChallenge.date);
+      ctx.font = 'bold 28px "Segoe UI", sans-serif';
+      ctx.fillText(`Mochii #${dayNum}`, panelX, panelY - 45);
+      ctx.font = '18px "Segoe UI", sans-serif';
+      ctx.fillStyle = "#6B8A5E";
+      ctx.fillText("Daily Challenge", panelX, panelY - 22);
+    } else {
+      ctx.font = 'bold 32px "Segoe UI", sans-serif';
+      ctx.fillText("Game Over", panelX, panelY - 35);
+    }
+
+    // Score
     ctx.font = '22px "Segoe UI", sans-serif';
     ctx.fillStyle = "#4A6741";
-    ctx.fillText(`Final Score: ${score}`, panelX, panelY + 15);
+    ctx.fillText(`Score: ${score}`, panelX, panelY + 10);
 
-    ctx.font = '16px "Segoe UI", sans-serif';
-    ctx.fillStyle = "#6B8A5E";
-    ctx.fillText("Click to play again", panelX, panelY + 55);
+    // Button styling helper
+    const drawButton = (text: string, y: number, highlighted: boolean = false) => {
+      const btnWidth = 120;
+      const btnHeight = 28;
+      ctx.fillStyle = highlighted ? "#7A9B6D" : "rgba(122, 155, 109, 0.3)";
+      ctx.beginPath();
+      ctx.roundRect(panelX - btnWidth/2, y - btnHeight/2, btnWidth, btnHeight, 8);
+      ctx.fill();
+      ctx.fillStyle = highlighted ? "#FFFFFF" : "#4A6741";
+      ctx.font = '14px "Segoe UI", sans-serif';
+      ctx.fillText(text, panelX, y + 5);
+    };
+
+    // Buttons
+    const dailyBtnY = panelY + 35;
+    const practiceBtnY = panelY + 70;
+    const shareBtnY = panelY + 105;
+
+    // Check if daily already played
+    const dailyAlreadyPlayed = dailyChallenge?.played && gameMode !== 'daily';
+    const canPlayDaily = !dailyAlreadyPlayed || (gameMode === 'daily' && dailyChallenge?.played);
+
+    drawButton(canPlayDaily && dailyChallenge?.played ? "Daily ✓" : "Daily Challenge", dailyBtnY, gameMode === 'daily');
+    drawButton("Free Play", practiceBtnY, gameMode === 'practice');
+
+    // Share button only for daily mode
+    if (gameMode === 'daily' && dailyChallenge) {
+      drawButton("📋 Share", shareBtnY, false);
+    }
   }
 }
 
@@ -1796,6 +1920,178 @@ function drawWalkingCat(ctx: CanvasRenderingContext2D): void {
 
   ctx.restore();
 }
+
+// Toggle animation state
+const toggleAnim = {
+  knobPosition: 0, // 0 = daily (left), 1 = free play (right)
+  targetPosition: 0,
+  squish: 0, // Squish effect when switching
+  bounce: 0,
+};
+
+// Draw mode toggle switch (mochi-inspired pill shape with animations)
+function drawModeToggle(ctx: CanvasRenderingContext2D, x: number, y: number, isDaily: boolean, nightMode: boolean): void {
+  const toggleWidth = 70;
+  const toggleHeight = 28;
+  const knobRadius = 11;
+  const padding = 4;
+
+  // Animate knob position with spring physics
+  toggleAnim.targetPosition = isDaily ? 0 : 1;
+  const diff = toggleAnim.targetPosition - toggleAnim.knobPosition;
+  toggleAnim.knobPosition += diff * 0.15;
+  toggleAnim.bounce *= 0.85;
+  toggleAnim.squish *= 0.9;
+
+  // Trigger bounce when close to target
+  if (Math.abs(diff) > 0.4) {
+    toggleAnim.squish = 0.15;
+  }
+
+  ctx.save();
+
+  // Soft outer glow
+  const glowGradient = ctx.createRadialGradient(x, y, toggleWidth * 0.3, x, y, toggleWidth * 0.8);
+  if (nightMode) {
+    glowGradient.addColorStop(0, "rgba(100, 140, 180, 0.15)");
+    glowGradient.addColorStop(1, "rgba(100, 140, 180, 0)");
+  } else {
+    glowGradient.addColorStop(0, "rgba(140, 180, 120, 0.2)");
+    glowGradient.addColorStop(1, "rgba(140, 180, 120, 0)");
+  }
+  ctx.fillStyle = glowGradient;
+  ctx.beginPath();
+  ctx.arc(x, y, toggleWidth * 0.7, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Toggle track (pill shape) with inner shadow effect
+  const trackGradient = ctx.createLinearGradient(x, y - toggleHeight/2, x, y + toggleHeight/2);
+  if (nightMode) {
+    trackGradient.addColorStop(0, "rgba(50, 70, 100, 0.8)");
+    trackGradient.addColorStop(0.5, "rgba(60, 85, 120, 0.75)");
+    trackGradient.addColorStop(1, "rgba(70, 95, 130, 0.8)");
+  } else {
+    trackGradient.addColorStop(0, "rgba(160, 185, 145, 0.85)");
+    trackGradient.addColorStop(0.5, "rgba(175, 200, 160, 0.8)");
+    trackGradient.addColorStop(1, "rgba(165, 190, 150, 0.85)");
+  }
+
+  ctx.fillStyle = trackGradient;
+  ctx.beginPath();
+  ctx.roundRect(x - toggleWidth/2, y - toggleHeight/2, toggleWidth, toggleHeight, toggleHeight/2);
+  ctx.fill();
+
+  // Inner shadow for depth
+  const innerShadow = ctx.createLinearGradient(x, y - toggleHeight/2, x, y - toggleHeight/2 + 8);
+  innerShadow.addColorStop(0, "rgba(0, 0, 0, 0.12)");
+  innerShadow.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = innerShadow;
+  ctx.beginPath();
+  ctx.roundRect(x - toggleWidth/2, y - toggleHeight/2, toggleWidth, toggleHeight, toggleHeight/2);
+  ctx.fill();
+
+  // Soft border
+  ctx.strokeStyle = nightMode ? "rgba(80, 110, 150, 0.6)" : "rgba(100, 140, 90, 0.5)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Labels with better visibility
+  ctx.font = '600 10px "Segoe UI", sans-serif';
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  // Daily label
+  const dailyAlpha = 0.4 + (1 - toggleAnim.knobPosition) * 0.4;
+  ctx.fillStyle = nightMode ? `rgba(200, 230, 255, ${dailyAlpha})` : `rgba(50, 80, 40, ${dailyAlpha})`;
+  ctx.fillText("D", x - toggleWidth/2 + 13, y);
+
+  // Free play label
+  const freeAlpha = 0.4 + toggleAnim.knobPosition * 0.4;
+  ctx.fillStyle = nightMode ? `rgba(200, 230, 255, ${freeAlpha})` : `rgba(50, 80, 40, ${freeAlpha})`;
+  ctx.fillText("F", x + toggleWidth/2 - 13, y);
+
+  // Calculate animated knob position
+  const leftX = x - toggleWidth/2 + knobRadius + padding;
+  const rightX = x + toggleWidth/2 - knobRadius - padding;
+  const knobX = leftX + (rightX - leftX) * toggleAnim.knobPosition;
+
+  // Squish deformation
+  const squishX = 1 + toggleAnim.squish * 0.3;
+  const squishY = 1 - toggleAnim.squish * 0.2;
+
+  // Knob shadow (soft, offset)
+  ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+  ctx.beginPath();
+  ctx.ellipse(knobX + 1.5, y + 2, knobRadius * squishX, knobRadius * squishY, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Mochi knob gradient - interpolate colors based on position
+  const dailyColor = { h: 110, s: 45, l: 65 }; // Green
+  const freeColor = { h: 35, s: 30, l: 90 }; // Cream
+  const t = toggleAnim.knobPosition;
+  const h = dailyColor.h + (freeColor.h - dailyColor.h) * t;
+  const s = dailyColor.s + (freeColor.s - dailyColor.s) * t;
+  const l = dailyColor.l + (freeColor.l - dailyColor.l) * t;
+
+  const knobGradient = ctx.createRadialGradient(knobX - 3, y - 3, 0, knobX, y, knobRadius * 1.2);
+  knobGradient.addColorStop(0, `hsl(${h}, ${s}%, ${Math.min(95, l + 15)}%)`);
+  knobGradient.addColorStop(0.5, `hsl(${h}, ${s}%, ${l}%)`);
+  knobGradient.addColorStop(1, `hsl(${h}, ${s + 10}%, ${l - 15}%)`);
+
+  ctx.fillStyle = knobGradient;
+  ctx.beginPath();
+  ctx.ellipse(knobX, y, knobRadius * squishX, knobRadius * squishY, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Knob highlight (glossy effect)
+  const highlightGradient = ctx.createRadialGradient(knobX - 3, y - 4, 0, knobX - 2, y - 3, knobRadius * 0.7);
+  highlightGradient.addColorStop(0, "rgba(255, 255, 255, 0.6)");
+  highlightGradient.addColorStop(0.5, "rgba(255, 255, 255, 0.2)");
+  highlightGradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+  ctx.fillStyle = highlightGradient;
+  ctx.beginPath();
+  ctx.ellipse(knobX, y, knobRadius * squishX, knobRadius * squishY, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Cute mochi face
+  ctx.strokeStyle = `rgba(80, 80, 80, ${0.5 + (1 - t) * 0.2})`;
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = "round";
+
+  const eyeSpacing = 3.5 * squishX;
+  const eyeY = y - 1;
+  const eyeSize = 2;
+
+  // Happy curved eyes
+  ctx.beginPath();
+  ctx.arc(knobX - eyeSpacing, eyeY, eyeSize, Math.PI * 0.15, Math.PI * 0.85);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(knobX + eyeSpacing, eyeY, eyeSize, Math.PI * 0.15, Math.PI * 0.85);
+  ctx.stroke();
+
+  // Tiny smile
+  ctx.beginPath();
+  ctx.arc(knobX, y + 2, 2.5 * squishX, Math.PI * 0.2, Math.PI * 0.8);
+  ctx.stroke();
+
+  // Rosy cheeks
+  ctx.fillStyle = `rgba(255, 150, 150, ${0.25 + (1 - t) * 0.15})`;
+  ctx.beginPath();
+  ctx.ellipse(knobX - eyeSpacing - 2, y + 1.5, 2, 1.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(knobX + eyeSpacing + 2, y + 1.5, 2, 1.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// Export for hit testing
+export const MODE_TOGGLE_BOUNDS = {
+  width: 70,
+  height: 28,
+};
 
 function drawSpeakerIcon(ctx: CanvasRenderingContext2D, width: number, height: number, soundEnabled: boolean, nightMode: boolean): void {
   const x = width - 30;
@@ -1973,6 +2269,13 @@ export function render(
   context.ctx.setTransform(context.dpr, 0, 0, context.dpr, 0, 0);
 
   clearCanvas(context, gameState.nightMode);
+
+  // Draw daily mode watermark (big muted day number in background)
+  if (gameState.gameMode === 'daily' && gameState.dailyChallenge) {
+    const dayNum = getDayNumber(gameState.dailyChallenge.date);
+    drawDailyWatermark(context.ctx, context.width, gameState.container.y, dayNum, gameState.nightMode);
+  }
+
   drawContainer(context, gameState.container, gameState.nightMode);
 
   // Draw drop preview (shows the mochi player is about to drop)

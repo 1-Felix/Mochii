@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import type { GameMode } from './types';
 
 // Supabase configuration
 const SUPABASE_URL = 'https://utzsbizennwcvpgbcrwf.supabase.co';
@@ -38,10 +39,15 @@ export interface LeaderboardEntry {
   name: string;
   score: number;
   created_at?: string;
+  game_mode?: string;
+  daily_date?: string;
 }
 
-// Leaderboard state
-let leaderboardData: LeaderboardEntry[] = [];
+// Leaderboard state - separate for each mode
+let freePlayLeaderboard: LeaderboardEntry[] = [];
+let dailyLeaderboard: LeaderboardEntry[] = [];
+let currentMode: GameMode = 'daily';
+let currentDailyDate: string = '';
 let isLoading = false;
 let supabase: SupabaseClient | null = null;
 
@@ -49,61 +55,121 @@ let supabase: SupabaseClient | null = null;
 export function initLeaderboard(): void {
   try {
     supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    fetchLeaderboard();
+    // Fetch both leaderboards initially
+    fetchLeaderboard('practice');
+    const today = new Date().toISOString().split('T')[0];
+    fetchLeaderboard('daily', today);
   } catch (e) {
     console.warn('Failed to initialize Supabase:', e);
   }
 }
 
-export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
+// Set current mode for getLeaderboard()
+export function setLeaderboardMode(mode: GameMode, dailyDate?: string): void {
+  currentMode = mode;
+  if (dailyDate) {
+    currentDailyDate = dailyDate;
+  }
+}
+
+export async function fetchLeaderboard(mode: GameMode, dailyDate?: string): Promise<LeaderboardEntry[]> {
   if (!supabase) return [];
 
   isLoading = true;
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('leaderboard')
       .select('*')
       .order('score', { ascending: false })
-      .limit(10);
+      .limit(50);
+
+    if (mode === 'daily' && dailyDate) {
+      // Daily leaderboard - filter by date
+      query = query.eq('game_mode', 'daily').eq('daily_date', dailyDate);
+    } else {
+      // Free play leaderboard - no date filter, just mode
+      query = query.eq('game_mode', 'freeplay');
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
-    leaderboardData = data || [];
+
+    if (mode === 'daily') {
+      dailyLeaderboard = data || [];
+    } else {
+      freePlayLeaderboard = data || [];
+    }
   } catch (e) {
     console.error('Failed to fetch leaderboard:', e);
   }
   isLoading = false;
-  return leaderboardData;
+  return mode === 'daily' ? dailyLeaderboard : freePlayLeaderboard;
 }
 
-export async function submitScore(name: string, score: number): Promise<boolean> {
+export async function submitScore(name: string, score: number, mode: GameMode, dailyDate?: string): Promise<boolean> {
   if (!supabase || score <= 0) return false;
 
-  try {
-    // Check if player already has a score
-    const { data: existing } = await supabase
-      .from('leaderboard')
-      .select('id, score')
-      .eq('name', name)
-      .single();
+  const gameMode = mode === 'daily' ? 'daily' : 'freeplay';
 
-    if (existing) {
-      // Only update if new score is higher
-      if (score > existing.score) {
+  try {
+    if (mode === 'daily' && dailyDate) {
+      // Daily mode: check if player already has a score for this specific day
+      const { data: existing } = await supabase
+        .from('leaderboard')
+        .select('id, score')
+        .eq('name', name)
+        .eq('game_mode', 'daily')
+        .eq('daily_date', dailyDate)
+        .single();
+
+      if (existing) {
+        // Only update if new score is higher
+        if (score > existing.score) {
+          const { error } = await supabase
+            .from('leaderboard')
+            .update({ score })
+            .eq('id', existing.id);
+          if (error) throw error;
+        }
+      } else {
+        // Insert new daily score
         const { error } = await supabase
           .from('leaderboard')
-          .update({ score })
-          .eq('id', existing.id);
+          .insert({ name, score, game_mode: gameMode, daily_date: dailyDate });
         if (error) throw error;
       }
+
+      await fetchLeaderboard('daily', dailyDate);
     } else {
-      // Insert new player
-      const { error } = await supabase
+      // Free play mode: single persistent entry per player
+      const { data: existing } = await supabase
         .from('leaderboard')
-        .insert({ name, score });
-      if (error) throw error;
+        .select('id, score')
+        .eq('name', name)
+        .eq('game_mode', 'freeplay')
+        .single();
+
+      if (existing) {
+        // Only update if new score is higher
+        if (score > existing.score) {
+          const { error } = await supabase
+            .from('leaderboard')
+            .update({ score })
+            .eq('id', existing.id);
+          if (error) throw error;
+        }
+      } else {
+        // Insert new player
+        const { error } = await supabase
+          .from('leaderboard')
+          .insert({ name, score, game_mode: gameMode });
+        if (error) throw error;
+      }
+
+      await fetchLeaderboard('practice');
     }
 
-    await fetchLeaderboard();
     return true;
   } catch (e) {
     console.error('Failed to submit score:', e);
@@ -112,7 +178,7 @@ export async function submitScore(name: string, score: number): Promise<boolean>
 }
 
 export function getLeaderboard(): LeaderboardEntry[] {
-  return leaderboardData;
+  return currentMode === 'daily' ? dailyLeaderboard : freePlayLeaderboard;
 }
 
 export function isLeaderboardLoading(): boolean {
@@ -121,7 +187,8 @@ export function isLeaderboardLoading(): boolean {
 
 // Check if score qualifies for leaderboard
 export function isHighScore(score: number): boolean {
-  if (leaderboardData.length < 10) return score > 0;
-  const lowestScore = leaderboardData[leaderboardData.length - 1]?.score || 0;
+  const data = currentMode === 'daily' ? dailyLeaderboard : freePlayLeaderboard;
+  if (data.length < 10) return score > 0;
+  const lowestScore = data[data.length - 1]?.score || 0;
   return score > lowestScore;
 }
