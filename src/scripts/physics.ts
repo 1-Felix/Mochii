@@ -1,62 +1,180 @@
-import type { Mochi, Point, Spring, PhysicsConfig, MochiColor, MochiTier, Container } from './types';
+import type {
+  Mochi,
+  Point,
+  Spring,
+  PhysicsConfig,
+  MochiColor,
+  MochiTier,
+  Container,
+} from "./types";
 
 export const defaultConfig: PhysicsConfig = {
-  springStiffness: 0.4,  // Slightly softer for more squish
-  damping: 0.9,          // More damping to reduce jitter
-  pressure: 1.3,         // Slightly less pressure for more deformation
-  gravity: 0.7,          // Faster falling
+  springStiffness: 0.4, // Slightly softer for more squish
+  damping: 0.9, // More damping to reduce jitter
+  pressure: 1.3, // Slightly less pressure for more deformation
+  gravity: 0.7, // Faster falling
   mouseForce: 0.5,
   mouseRadius: 120,
-  wallBounce: 0.3,       // Less bouncy
-  friction: 0.88,        // More friction
+  wallBounce: 0.3, // Less bouncy
+  friction: 0.88, // More friction
   squishRecovery: 0.045, // Moderate recovery
 };
 
 // 11 mochi tiers - real mochi flavors from light to dark
 export const mochiTiers: MochiTier[] = [
-  { // 0: Vanilla (plain white mochi)
-    level: 0, name: 'Vanilla', radius: 18, points: 1,
-    color: { primary: '#F8F4EC', secondary: '#EBE5D8', highlight: '#FFFEFA', shadow: 'rgba(120, 110, 90, 0.25)', cheek: '#EACFC0' }
+  {
+    // 0: Vanilla (plain white mochi)
+    level: 0,
+    name: "Vanilla",
+    radius: 18,
+    points: 1,
+    color: {
+      primary: "#F8F4EC",
+      secondary: "#EBE5D8",
+      highlight: "#FFFEFA",
+      shadow: "rgba(120, 110, 90, 0.25)",
+      cheek: "#EACFC0",
+    },
   },
-  { // 1: Sakura (cherry blossom)
-    level: 1, name: 'Sakura', radius: 24, points: 3,
-    color: { primary: '#F8D7DD', secondary: '#F0C4CC', highlight: '#FFF0F3', shadow: 'rgba(150, 100, 110, 0.25)', cheek: '#E8A0B0' }
+  {
+    // 1: Sakura (cherry blossom)
+    level: 1,
+    name: "Sakura",
+    radius: 24,
+    points: 3,
+    color: {
+      primary: "#F8D7DD",
+      secondary: "#F0C4CC",
+      highlight: "#FFF0F3",
+      shadow: "rgba(150, 100, 110, 0.25)",
+      cheek: "#E8A0B0",
+    },
   },
-  { // 2: Yuzu (citrus)
-    level: 2, name: 'Yuzu', radius: 30, points: 6,
-    color: { primary: '#F8E8A0', secondary: '#EED880', highlight: '#FFFBE8', shadow: 'rgba(140, 120, 50, 0.25)', cheek: '#E0C060' }
+  {
+    // 2: Yuzu (citrus)
+    level: 2,
+    name: "Yuzu",
+    radius: 30,
+    points: 6,
+    color: {
+      primary: "#F8E8A0",
+      secondary: "#EED880",
+      highlight: "#FFFBE8",
+      shadow: "rgba(140, 120, 50, 0.25)",
+      cheek: "#E0C060",
+    },
   },
-  { // 3: Strawberry
-    level: 3, name: 'Strawberry', radius: 38, points: 10,
-    color: { primary: '#F4A0A8', secondary: '#E88890', highlight: '#FFD8DC', shadow: 'rgba(160, 80, 90, 0.28)', cheek: '#E06878' }
+  {
+    // 3: Strawberry
+    level: 3,
+    name: "Strawberry",
+    radius: 38,
+    points: 10,
+    color: {
+      primary: "#F4A0A8",
+      secondary: "#E88890",
+      highlight: "#FFD8DC",
+      shadow: "rgba(160, 80, 90, 0.28)",
+      cheek: "#E06878",
+    },
   },
-  { // 4: Mango
-    level: 4, name: 'Mango', radius: 46, points: 15,
-    color: { primary: '#F8C878', secondary: '#F0B050', highlight: '#FFE8C0', shadow: 'rgba(160, 110, 40, 0.28)', cheek: '#E89830' }
+  {
+    // 4: Mango
+    level: 4,
+    name: "Mango",
+    radius: 46,
+    points: 15,
+    color: {
+      primary: "#F8C878",
+      secondary: "#F0B050",
+      highlight: "#FFE8C0",
+      shadow: "rgba(160, 110, 40, 0.28)",
+      cheek: "#E89830",
+    },
   },
-  { // 5: Matcha (green tea)
-    level: 5, name: 'Matcha', radius: 54, points: 21,
-    color: { primary: '#A8C890', secondary: '#90B078', highlight: '#D0E8C0', shadow: 'rgba(80, 100, 60, 0.28)', cheek: '#78A058' }
+  {
+    // 5: Matcha (green tea)
+    level: 5,
+    name: "Matcha",
+    radius: 54,
+    points: 21,
+    color: {
+      primary: "#A8C890",
+      secondary: "#90B078",
+      highlight: "#D0E8C0",
+      shadow: "rgba(80, 100, 60, 0.28)",
+      cheek: "#78A058",
+    },
   },
-  { // 6: Taro (purple yam)
-    level: 6, name: 'Taro', radius: 62, points: 28,
-    color: { primary: '#C8A8D0', secondary: '#B090C0', highlight: '#E8D8F0', shadow: 'rgba(100, 70, 120, 0.28)', cheek: '#9870A8' }
+  {
+    // 6: Taro (purple yam)
+    level: 6,
+    name: "Taro",
+    radius: 62,
+    points: 28,
+    color: {
+      primary: "#C8A8D0",
+      secondary: "#B090C0",
+      highlight: "#E8D8F0",
+      shadow: "rgba(100, 70, 120, 0.28)",
+      cheek: "#9870A8",
+    },
   },
-  { // 7: Hojicha (roasted tea)
-    level: 7, name: 'Hojicha', radius: 72, points: 36,
-    color: { primary: '#C8A888', secondary: '#B89070', highlight: '#E8D8C8', shadow: 'rgba(110, 80, 50, 0.3)', cheek: '#A07850' }
+  {
+    // 7: Hojicha (roasted tea)
+    level: 7,
+    name: "Hojicha",
+    radius: 72,
+    points: 36,
+    color: {
+      primary: "#C8A888",
+      secondary: "#B89070",
+      highlight: "#E8D8C8",
+      shadow: "rgba(110, 80, 50, 0.3)",
+      cheek: "#A07850",
+    },
   },
-  { // 8: Chocolate
-    level: 8, name: 'Chocolate', radius: 82, points: 45,
-    color: { primary: '#8B6850', secondary: '#705038', highlight: '#B89880', shadow: 'rgba(80, 50, 30, 0.3)', cheek: '#583820' }
+  {
+    // 8: Chocolate
+    level: 8,
+    name: "Chocolate",
+    radius: 82,
+    points: 45,
+    color: {
+      primary: "#8B6850",
+      secondary: "#705038",
+      highlight: "#B89880",
+      shadow: "rgba(80, 50, 30, 0.3)",
+      cheek: "#583820",
+    },
   },
-  { // 9: Black Sesame (goma)
-    level: 9, name: 'Black Sesame', radius: 94, points: 55,
-    color: { primary: '#5A5550', secondary: '#484440', highlight: '#888480', shadow: 'rgba(50, 45, 40, 0.3)', cheek: '#383430' }
+  {
+    // 9: Black Sesame (goma)
+    level: 9,
+    name: "Black Sesame",
+    radius: 94,
+    points: 55,
+    color: {
+      primary: "#5A5550",
+      secondary: "#484440",
+      highlight: "#888480",
+      shadow: "rgba(50, 45, 40, 0.3)",
+      cheek: "#383430",
+    },
   },
-  { // 10: Kuromame (black bean) - largest!
-    level: 10, name: 'Kuromame', radius: 108, points: 66,
-    color: { primary: '#3A3530', secondary: '#282420', highlight: '#585450', shadow: 'rgba(30, 25, 20, 0.35)', cheek: '#181410' }
+  {
+    // 10: Kuromame (black bean) - largest!
+    level: 10,
+    name: "Kuromame",
+    radius: 108,
+    points: 66,
+    color: {
+      primary: "#3A3530",
+      secondary: "#282420",
+      highlight: "#585450",
+      shadow: "rgba(30, 25, 20, 0.35)",
+      cheek: "#181410",
+    },
   },
 ];
 
@@ -140,7 +258,7 @@ export function createMochi(x: number, y: number, tier: number): Mochi {
     baseRadius: radius,
     color: tierData.color,
     grabbed: false,
-    emotion: 'happy',
+    emotion: "happy",
     emotionTimer: 0,
     squishAmount: 0,
     impactVelocity: 0,
@@ -157,7 +275,8 @@ export function createMochi(x: number, y: number, tier: number): Mochi {
 }
 
 function calculateCenter(points: Point[]): { x: number; y: number } {
-  let x = 0, y = 0;
+  let x = 0,
+    y = 0;
   for (const p of points) {
     x += p.x;
     y += p.y;
@@ -177,7 +296,8 @@ function calculateArea(points: Point[]): number {
 }
 
 function calculateVelocity(points: Point[]): { vx: number; vy: number } {
-  let vx = 0, vy = 0;
+  let vx = 0,
+    vy = 0;
   for (const p of points) {
     vx += p.vx;
     vy += p.vy;
@@ -189,7 +309,7 @@ export function updateMochi(
   mochi: Mochi,
   config: PhysicsConfig,
   container: Container,
-  dt: number = 1
+  dt: number = 1,
 ): void {
   if (mochi.merging) return; // Don't update merging mochi
 
@@ -217,18 +337,18 @@ export function updateMochi(
   if (mochi.emotionTimer <= 0) {
     let newEmotion = mochi.emotion;
     if (speed > 10) {
-      newEmotion = 'flying';
+      newEmotion = "flying";
     } else if (mochi.squishAmount > 0.4 || deformation > 0.2) {
       // Show squished face when noticeably compressed
-      newEmotion = 'squished';
+      newEmotion = "squished";
     } else if (speed < 0.3 && mochi.squishAmount < 0.12 && deformation < 0.08) {
-      newEmotion = Math.random() > 0.2 ? 'happy' : 'sleepy';
+      newEmotion = Math.random() > 0.2 ? "happy" : "sleepy";
     } else if (mochi.squishAmount < 0.18 && speed < 3) {
-      newEmotion = 'happy';
+      newEmotion = "happy";
     }
     if (newEmotion !== mochi.emotion) {
       mochi.emotion = newEmotion;
-      mochi.emotionTimer = newEmotion === 'squished' ? 25 : 15;
+      mochi.emotionTimer = newEmotion === "squished" ? 25 : 15;
     }
   }
 
@@ -288,12 +408,27 @@ export function updateMochi(
     }
   }
 
-  // Pressure
+  // Pressure with hard core
   center = calculateCenter(points);
   const targetArea = Math.PI * mochi.baseRadius * mochi.baseRadius;
   const currentArea = calculateArea(points);
   const areaDiff = (targetArea - currentArea) / targetArea;
-  const pressureForce = areaDiff * config.pressure;
+  const compressionRatio = currentArea / targetArea;
+
+  // Base pressure (normal squishiness)
+  let pressureForce = areaDiff * config.pressure;
+
+  // Hard core: smaller mochi have stronger cores (they're at the bottom under more weight)
+  // Tier 0-1: threshold 75%, multiplier 15
+  // Tier 2-3: threshold 68%, multiplier 12
+  // Tier 4+:  threshold 60%, multiplier 8
+  const coreThreshold = mochi.tier <= 1 ? 0.75 : mochi.tier <= 3 ? 0.68 : 0.6;
+  const coreStrength = mochi.tier <= 1 ? 15 : mochi.tier <= 3 ? 12 : 8;
+
+  if (compressionRatio < coreThreshold) {
+    const coreCompression = (coreThreshold - compressionRatio) / coreThreshold;
+    pressureForce += coreCompression * coreCompression * config.pressure * coreStrength;
+  }
 
   for (const p of points) {
     const dx = p.x - center.x;
@@ -337,7 +472,7 @@ export function updateMochi(
 
   // Apply stronger damping when rotating or at rest (frame-rate independent)
   const rotationStrength = Math.abs(angularVel);
-  const baseDamping = mochi.hasLanded ? 0.4 : (rotationStrength > 0.5 ? 0.25 : 0.1);
+  const baseDamping = mochi.hasLanded ? 0.4 : rotationStrength > 0.5 ? 0.25 : 0.1;
   const angularDampingFactor = 1 - Math.pow(1 - baseDamping, dt);
 
   if (avgSpeed < 5 || rotationStrength > 0.3) {
@@ -410,7 +545,7 @@ export function updateMochi(
     mochi.squishAmount = Math.max(mochi.squishAmount, squashAmount);
     mochi.wobbleIntensity = Math.min(2.5, mochi.wobbleIntensity + maxFloorImpact * 0.15);
     if (maxFloorImpact > 4) {
-      mochi.emotion = 'squished';
+      mochi.emotion = "squished";
       mochi.emotionTimer = Math.min(35, maxFloorImpact * 3);
     }
   }
