@@ -21,7 +21,8 @@
       "Bash(pnpm astro check:*)",
       "Bash(npx tsc --noEmit)",
       "mcp__supabase__execute_sql",
-      "Bash(pnpm run build:*)"
+      "Bash(pnpm run build:*)",
+      "Bash(pnpm build:*)"
     ]
   }
 }

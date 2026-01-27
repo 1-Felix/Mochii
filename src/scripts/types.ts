@@ -30,7 +30,7 @@ export interface MochiColor {
   cheek: string;
 }
 
-export type MochiEmotion = 'happy' | 'surprised' | 'squished' | 'flying' | 'sleepy' | 'love';
+export type MochiEmotion = 'happy' | 'surprised' | 'squished' | 'flying' | 'sleepy' | 'love' | 'yawning' | 'stressed';
 
 export interface Mochi {
   id: number;
@@ -58,6 +58,16 @@ export interface Mochi {
   isDropping: boolean; // Currently being dropped by player
   hasLanded: boolean; // Has touched something after being dropped
   settleTimer: number; // Frames since landing - for game over grace period
+  // Animation states
+  blinkTimer: number; // Countdown to next blink
+  blinkState: number; // 0 = open, >0 = closing/closed
+  lookDirection: number; // -1 to 1, where to look (0 = center)
+  lookTimer: number; // How long to look in current direction
+  idleTimer: number; // How long mochi has been idle (for yawning)
+  // Jitter detection
+  jitterAmount: number; // Accumulated jitter score
+  prevVx: number; // Previous frame velocity for jitter detection
+  prevVy: number;
 }
 
 export interface PhysicsConfig {
@@ -88,6 +98,8 @@ export interface GameState {
   lastInteraction: number;
   easterEggActive: string | null;
   easterEggTimer: number;
+  // Sound state
+  soundEnabled: boolean;
 }
 
 export interface CherryBlossom {

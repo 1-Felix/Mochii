@@ -1,6 +1,6 @@
 import type { Mochi, CanvasContext, GameState, Container } from './types';
 import { createMochi, updateMochi, checkMochiCollision, canMerge, mochiTiers, defaultConfig, getRandomDroppableTier } from './physics';
-import { createCanvasContext, resizeCanvas, render, addMergeEffect, addCherryBlossoms, triggerCatWalk, updateEasterEggs, isCatWalking } from './renderer';
+import { createCanvasContext, resizeCanvas, render, addMergeEffect, addCherryBlossoms, triggerCatWalk, updateEasterEggs, isCatWalking, initAmbientEffects, addDustPoof } from './renderer';
 import { initLeaderboard, getLeaderboard, getOrCreatePlayerName, submitScore } from './leaderboard';
 
 let context: CanvasContext;
@@ -11,6 +11,65 @@ let lastTime = 0;
 let dropCooldown = 0;
 let playerName: string;
 
+// Sound management - Pentatonic scale for gentle plop sounds
+// Higher pitch for small mochi, lower for large (reversed order)
+const MERGE_NOTES = [
+  523.25, // C5 - Tier 0 (Vanilla) - highest, small
+  440.00, // A4 - Tier 1 (Sakura)
+  392.00, // G4 - Tier 2 (Yuzu)
+  329.63, // E4 - Tier 3 (Strawberry)
+  293.66, // D4 - Tier 4 (Mango)
+  261.63, // C4 - Tier 5 (Matcha)
+  220.00, // A3 - Tier 6 (Taro)
+  196.00, // G3 - Tier 7 (Hojicha)
+  164.81, // E3 - Tier 8 (Chocolate)
+  146.83, // D3 - Tier 9 (Black Sesame)
+  130.81, // C3 - Tier 10 (Kuromame) - lowest, large
+];
+
+function playMergeSound(tier: number): void {
+  if (!gameState || !gameState.soundEnabled) return;
+
+  try {
+    const audioContext = new (window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+
+    // Get the note for this tier (clamped to available notes)
+    const noteIndex = Math.min(tier, MERGE_NOTES.length - 1);
+    const baseFreq = MERGE_NOTES[noteIndex];
+
+    // Gentle "plop" sound - lower pitch drop with soft attack
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+
+    // Add a warmer lowpass filter
+    const filter = audioContext.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(500, audioContext.currentTime);
+    filter.Q.setValueAtTime(0.7, audioContext.currentTime);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioContext.destination);
+
+    // Plop: start slightly higher, drop to a lower note for that bubble pop feel
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(baseFreq * 1.4, audioContext.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.6, audioContext.currentTime + 0.1);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.4, audioContext.currentTime + 0.25);
+
+    // Soft, gentle envelope for plop feel
+    gain.gain.setValueAtTime(0, audioContext.currentTime);
+    gain.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.02); // Quick but soft attack
+    gain.gain.exponentialRampToValueAtTime(0.03, audioContext.currentTime + 0.12);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.35);
+
+    osc.start(audioContext.currentTime);
+    osc.stop(audioContext.currentTime + 0.4);
+  } catch {
+    // Silently fail if audio doesn't work
+  }
+}
+
 
 // Easter egg tracking
 const KONAMI_CODE = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'KeyB', 'KeyA'];
@@ -18,6 +77,9 @@ let konamiIndex = 0;
 let typedChars = '';
 const IDLE_TIMEOUT = 30000; // 30 seconds
 let wasCatWalking = false; // Track cat state for emotion reset
+
+// Track landing states for dust poof effect
+const previousLandingStates = new Map<number, boolean>();
 
 // Fixed container size to prevent cheating
 const CONTAINER_WIDTH = 320;
@@ -63,6 +125,8 @@ function initGameState(): void {
     lastInteraction: Date.now(),
     easterEggActive: null,
     easterEggTimer: 0,
+    // Sound
+    soundEnabled: true,
   };
   mochis = [];
   dropCooldown = 0;
@@ -88,7 +152,13 @@ function dropMochi(x: number): void {
   const mochi = createMochi(clampedX, container.overflowLine - 50, tier);
   mochi.isDropping = true;
   mochi.emotion = 'surprised';
-  mochi.emotionTimer = 20;
+  mochi.emotionTimer = 12; // Brief surprised look when dropped
+
+  // Give initial downward velocity to maintain falling speed with lower gravity
+  for (const p of mochi.points) {
+    p.vy = 2;
+  }
+
   mochis.push(mochi);
 
   // Prepare next mochi
@@ -121,6 +191,9 @@ function mergeMochis(m1: Mochi, m2: Mochi): void {
 
   // Add merge effect
   addMergeEffect(mergeX, mergeY, mochiTiers[newTier].radius, mochiTiers[newTier].color.primary);
+
+  // Play harmonizing merge sound based on tier
+  playMergeSound(newTier);
 
   // Delayed creation of new mochi
   setTimeout(() => {
@@ -202,6 +275,16 @@ function update(dt: number): void {
   // Post-physics updates (once per frame, not per step)
   for (const mochi of mochis) {
     if (!mochi.merging) {
+      // Check for landing - spawn dust poof
+      const wasLanded = previousLandingStates.get(mochi.id) ?? false;
+      if (mochi.hasLanded && !wasLanded) {
+        // Just landed! Spawn dust poof at bottom of mochi
+        const bottomY = mochi.cy + mochi.baseRadius * 0.8;
+        const intensity = Math.min(2, Math.abs(mochi.impactVelocity) * 0.3 + 0.5);
+        addDustPoof(mochi.cx, bottomY, intensity);
+      }
+      previousLandingStates.set(mochi.id, mochi.hasLanded);
+
       // Decrement settle timer (grace period for game over)
       if (mochi.settleTimer > 0) {
         mochi.settleTimer -= dt;
@@ -211,6 +294,70 @@ function update(dt: number): void {
       if (mochi.impactVelocity > 0) {
         mochi.impactVelocity *= 0.8;
         if (mochi.impactVelocity < 0.5) mochi.impactVelocity = 0;
+      }
+
+      // Update blink animation
+      if (mochi.blinkState > 0) {
+        mochi.blinkState -= dt * 0.15;
+        if (mochi.blinkState <= 0) {
+          mochi.blinkState = 0;
+          mochi.blinkTimer = 90 + Math.random() * 180; // 1.5-4.5 seconds until next blink
+        }
+      } else {
+        mochi.blinkTimer -= dt;
+        if (mochi.blinkTimer <= 0) {
+          mochi.blinkState = 1; // Start blinking
+        }
+      }
+
+      // Update look direction (glancing at nearby mochi)
+      if (mochi.lookTimer > 0) {
+        mochi.lookTimer -= dt;
+        if (mochi.lookTimer <= 0) {
+          mochi.lookDirection = 0; // Return to center
+          mochi.lookTimer = 0;
+        }
+      } else if (Math.random() < 0.003 * dt) {
+        // Occasionally look at a nearby mochi
+        let nearestDist = Infinity;
+        let nearestDir = 0;
+        for (const other of mochis) {
+          if (other === mochi || other.merging) continue;
+          const dx = other.cx - mochi.cx;
+          const dy = other.cy - mochi.cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < mochi.baseRadius * 4 && dist < nearestDist) {
+            nearestDist = dist;
+            nearestDir = dx > 0 ? 1 : -1;
+          }
+        }
+        if (nearestDir !== 0) {
+          mochi.lookDirection = nearestDir * (0.5 + Math.random() * 0.5);
+          mochi.lookTimer = 30 + Math.random() * 60; // Look for 0.5-1.5 seconds
+        }
+      }
+
+      // Update idle timer for yawning/sleepy
+      const speed = Math.sqrt(mochi.vx * mochi.vx + mochi.vy * mochi.vy);
+      if (speed < 0.5 && mochi.hasLanded) {
+        mochi.idleTimer += dt;
+        // Trigger yawning after being idle for a while
+        if (mochi.idleTimer > 600 && mochi.idleTimer < 660 && mochi.emotion !== 'yawning' && mochi.emotion !== 'sleepy') {
+          mochi.emotion = 'yawning';
+          mochi.emotionTimer = 60;
+        }
+        // Transition from yawning to sleepy after yawn finishes
+        if (mochi.emotion === 'yawning' && mochi.emotionTimer <= 0) {
+          mochi.emotion = 'sleepy';
+          mochi.emotionTimer = 999; // Stay sleepy until disturbed
+        }
+      } else {
+        mochi.idleTimer = 0;
+        // Wake up if moving and was sleepy/yawning
+        if ((mochi.emotion === 'sleepy' || mochi.emotion === 'yawning') && speed > 2) {
+          mochi.emotion = 'happy';
+          mochi.emotionTimer = 30;
+        }
       }
     } else {
       // Update merge animation
@@ -361,6 +508,16 @@ function handleClick(e: MouseEvent): void {
   const y = e.clientY - rect.top;
   gameState.lastInteraction = Date.now();
 
+  // Check for speaker icon click (bottom right corner)
+  const speakerX = context.width - 30;
+  const speakerY = context.height - 30;
+  const dxSpeaker = x - speakerX;
+  const dySpeaker = y - speakerY;
+  if (Math.sqrt(dxSpeaker * dxSpeaker + dySpeaker * dySpeaker) < 25) {
+    gameState.soundEnabled = !gameState.soundEnabled;
+    return;
+  }
+
   // Check for moon click (top right area, lower on mobile for accessibility)
   const isMobile = context.width < 500 || context.height < 700;
   const moonX = context.width - 35;
@@ -406,6 +563,45 @@ function handleTouchMove(e: TouchEvent): void {
 function handleTouchEnd(e: TouchEvent): void {
   e.preventDefault();
   gameState.lastInteraction = Date.now();
+
+  // Get touch position from the last touch
+  const rect = context.canvas.getBoundingClientRect();
+  const touch = e.changedTouches[0];
+  const x = touch ? touch.clientX - rect.left : gameState.dropX;
+  const y = touch ? touch.clientY - rect.top : 0;
+
+  // Check for speaker icon tap (bottom right corner)
+  const speakerX = context.width - 30;
+  const speakerY = context.height - 30;
+  const dxSpeaker = x - speakerX;
+  const dySpeaker = y - speakerY;
+  if (Math.sqrt(dxSpeaker * dxSpeaker + dySpeaker * dySpeaker) < 35) { // Larger tap target for mobile
+    gameState.soundEnabled = !gameState.soundEnabled;
+    return;
+  }
+
+  // Check for moon/sun tap (top right area)
+  const isMobile = context.width < 500 || context.height < 700;
+  const moonX = context.width - 35;
+  const moonY = isMobile ? 55 : 35;
+  const dxMoon = x - moonX;
+  const dyMoon = y - moonY;
+  if (Math.sqrt(dxMoon * dxMoon + dyMoon * dyMoon) < 40) { // Larger tap target for mobile
+    gameState.nightMode = !gameState.nightMode;
+    if (gameState.nightMode) {
+      for (const mochi of mochis) {
+        mochi.emotion = 'sleepy';
+        mochi.emotionTimer = 120;
+      }
+    } else {
+      for (const mochi of mochis) {
+        mochi.emotion = 'happy';
+        mochi.emotionTimer = 90;
+      }
+    }
+    return;
+  }
+
   if (gameState.gameOver) {
     initGameState();
     return;
@@ -420,6 +616,9 @@ export function init(canvas: HTMLCanvasElement): () => void {
   // Initialize leaderboard and player
   playerName = getOrCreatePlayerName();
   initLeaderboard();
+
+  // Initialize ambient effects (particles, fireflies, rain)
+  initAmbientEffects(context.width, context.height);
 
   initGameState();
 

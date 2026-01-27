@@ -16,6 +16,64 @@ import type { LeaderboardEntry } from "./leaderboard";
 const mergeEffects: MergeEffect[] = [];
 const impactStars: ImpactStar[] = [];
 
+// Ambient particles (dust motes floating gently)
+interface AmbientParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  opacity: number;
+  phase: number;
+  life: number; // 0-1, controls fade in/out
+  lifeSpeed: number; // How fast it fades
+  fadingIn: boolean; // Direction of fade
+}
+const ambientParticles: AmbientParticle[] = [];
+
+// Fireflies for night mode
+interface Firefly {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  glowPhase: number;
+  glowSpeed: number;
+  size: number;
+}
+const fireflies: Firefly[] = [];
+
+// Rain drops for night mode
+interface RainDrop {
+  x: number;
+  y: number;
+  length: number;
+  speed: number;
+  opacity: number;
+}
+const rainDrops: RainDrop[] = [];
+
+// Warmth wisps (gentle steam-like rising particles)
+interface WarmthWisp {
+  x: number;
+  y: number;
+  size: number;
+  opacity: number;
+  speed: number;
+  wobblePhase: number;
+  wobbleSpeed: number;
+}
+const warmthWisps: WarmthWisp[] = [];
+
+// Landing dust poofs
+interface DustPoof {
+  x: number;
+  y: number;
+  particles: { x: number; y: number; vx: number; vy: number; size: number; life: number }[];
+  life: number;
+}
+const dustPoofs: DustPoof[] = [];
+
 // Easter egg effects
 const cherryBlossoms: CherryBlossom[] = [];
 const walkingCat: WalkingCat = { x: -50, y: 0, direction: 1, frame: 0, active: false };
@@ -30,6 +88,26 @@ catSprite.onload = () => {
   catFrameWidth = catSprite.width / CAT_FRAMES;
   catFrameHeight = catSprite.height;
 };
+
+export function addDustPoof(x: number, y: number, intensity: number = 1): void {
+  const particles: DustPoof["particles"] = [];
+  const count = Math.floor(6 + intensity * 4);
+
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI + Math.random() * 0.5; // Spread upward in arc
+    const speed = (0.5 + Math.random() * 1) * intensity;
+    particles.push({
+      x,
+      y,
+      vx: Math.cos(angle) * speed * 2,
+      vy: -Math.sin(angle) * speed - 0.5,
+      size: 2 + Math.random() * 3,
+      life: 1,
+    });
+  }
+
+  dustPoofs.push({ x, y, particles, life: 1 });
+}
 
 export function addCherryBlossoms(width: number, height: number, count: number): void {
   for (let i = 0; i < count; i++) {
@@ -58,7 +136,193 @@ export function isCatWalking(): boolean {
   return walkingCat.active;
 }
 
+// Store screen dimensions for particle systems
+let screenWidth = 400;
+let screenHeight = 600;
+
+export function initAmbientEffects(width: number, height: number): void {
+  screenWidth = width;
+  screenHeight = height;
+
+  // Initialize ambient particles if empty
+  if (ambientParticles.length === 0) {
+    for (let i = 0; i < 20; i++) {
+      ambientParticles.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.2,
+        vy: (Math.random() - 0.5) * 0.12 - 0.06, // Gentle upward drift
+        size: 2 + Math.random() * 2.5,
+        opacity: 0.25 + Math.random() * 0.2, // Reduced base opacity
+        phase: Math.random() * Math.PI * 2,
+        life: Math.random(), // Start at random point in lifecycle
+        lifeSpeed: 0.003 + Math.random() * 0.004, // Slow fade
+        fadingIn: Math.random() > 0.5,
+      });
+    }
+  }
+
+  // Initialize fireflies if empty (fewer for cozy vibe)
+  if (fireflies.length === 0) {
+    for (let i = 0; i < 6; i++) {
+      fireflies.push({
+        x: Math.random() * width,
+        y: Math.random() * height * 0.7,
+        vx: (Math.random() - 0.5) * 0.15,
+        vy: (Math.random() - 0.5) * 0.1,
+        glowPhase: Math.random() * Math.PI * 2,
+        glowSpeed: 0.008 + Math.random() * 0.012, // Slower, dreamier glow
+        size: 2 + Math.random() * 1.5,
+      });
+    }
+  }
+
+  // Initialize rain drops if empty
+  if (rainDrops.length === 0) {
+    for (let i = 0; i < 60; i++) {
+      rainDrops.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        length: 10 + Math.random() * 15,
+        speed: 3 + Math.random() * 2,
+        opacity: 0.1 + Math.random() * 0.2,
+      });
+    }
+  }
+
+  // Initialize warmth wisps if empty
+  if (warmthWisps.length === 0) {
+    for (let i = 0; i < 12; i++) {
+      warmthWisps.push({
+        x: Math.random() * width,
+        y: height * 0.5 + Math.random() * height * 0.5,
+        size: 50 + Math.random() * 60,
+        opacity: 0.12 + Math.random() * 0.1,
+        speed: 0.15 + Math.random() * 0.12,
+        wobblePhase: Math.random() * Math.PI * 2,
+        wobbleSpeed: 0.006 + Math.random() * 0.006,
+      });
+    }
+  }
+}
+
 export function updateEasterEggs(dt: number): void {
+  // Update ambient particles
+  for (const p of ambientParticles) {
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.phase += 0.02 * dt;
+
+    // Update life (fade in/out)
+    if (p.fadingIn) {
+      p.life += p.lifeSpeed * dt;
+      if (p.life >= 1) {
+        p.life = 1;
+        p.fadingIn = false;
+      }
+    } else {
+      p.life -= p.lifeSpeed * dt;
+      if (p.life <= 0) {
+        // Respawn at new random position
+        p.life = 0;
+        p.fadingIn = true;
+        p.x = Math.random() * screenWidth;
+        p.y = Math.random() * screenHeight;
+        p.vx = (Math.random() - 0.5) * 0.2;
+        p.vy = (Math.random() - 0.5) * 0.12 - 0.06;
+      }
+    }
+
+    // Gentle wandering
+    p.vx += (Math.random() - 0.5) * 0.015 * dt;
+    p.vy += (Math.random() - 0.5) * 0.015 * dt;
+
+    // Keep velocity small
+    p.vx *= 0.99;
+    p.vy *= 0.99;
+
+    // Wrap around screen
+    if (p.x < 0) p.x = screenWidth;
+    if (p.x > screenWidth) p.x = 0;
+    if (p.y < 0) p.y = screenHeight;
+    if (p.y > screenHeight) p.y = 0;
+  }
+
+  // Update fireflies (slower, dreamier movement)
+  for (const f of fireflies) {
+    f.x += f.vx * dt;
+    f.y += f.vy * dt;
+    f.glowPhase += f.glowSpeed * dt;
+
+    // Very gentle wandering
+    f.vx += (Math.random() - 0.5) * 0.015 * dt;
+    f.vy += (Math.random() - 0.5) * 0.015 * dt;
+
+    // Keep velocity very small for lazy drifting
+    const speed = Math.sqrt(f.vx * f.vx + f.vy * f.vy);
+    if (speed > 0.25) {
+      f.vx *= 0.25 / speed;
+      f.vy *= 0.25 / speed;
+    }
+
+    // Wrap around screen
+    if (f.x < 0) f.x = screenWidth;
+    if (f.x > screenWidth) f.x = 0;
+    if (f.y < 0) f.y = screenHeight * 0.7;
+    if (f.y > screenHeight * 0.7) f.y = 0;
+  }
+
+  // Update rain drops
+  for (const r of rainDrops) {
+    r.y += r.speed * dt;
+    r.x -= 0.5 * dt; // Slight angle
+
+    // Reset when off screen
+    if (r.y > screenHeight) {
+      r.y = -r.length;
+      r.x = Math.random() * screenWidth;
+    }
+    if (r.x < 0) r.x = screenWidth;
+  }
+
+  // Update warmth wisps
+  for (const w of warmthWisps) {
+    w.y -= w.speed * dt;
+    w.wobblePhase += w.wobbleSpeed * dt;
+    w.x += Math.sin(w.wobblePhase) * 0.4 * dt;
+
+    // Fade out as it rises
+    if (w.y < screenHeight * 0.4) {
+      w.opacity -= 0.0008 * dt;
+    }
+
+    // Reset when faded or off screen
+    if (w.y < -w.size || w.opacity <= 0) {
+      w.y = screenHeight + Math.random() * 30;
+      w.x = Math.random() * screenWidth;
+      w.opacity = 0.12 + Math.random() * 0.1;
+      w.wobblePhase = Math.random() * Math.PI * 2;
+    }
+  }
+
+  // Update dust poofs
+  for (let i = dustPoofs.length - 1; i >= 0; i--) {
+    const poof = dustPoofs[i];
+    poof.life -= 0.02 * dt;
+
+    for (const p of poof.particles) {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 0.02 * dt; // Slight gravity
+      p.vx *= 0.98; // Friction
+      p.life -= 0.025 * dt;
+    }
+
+    if (poof.life <= 0) {
+      dustPoofs.splice(i, 1);
+    }
+  }
+
   // Update cherry blossoms
   for (let i = cherryBlossoms.length - 1; i >= 0; i--) {
     const b = cherryBlossoms[i];
@@ -156,6 +420,37 @@ export function clearCanvas(context: CanvasContext, nightMode: boolean = false):
       ctx.arc(starX, starY, 5, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    // Fireflies - glowing wandering lights
+    for (const f of fireflies) {
+      const glow = 0.3 + 0.7 * Math.sin(f.glowPhase);
+      // Outer glow
+      const glowGradient = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.size * 4);
+      glowGradient.addColorStop(0, `rgba(180, 255, 150, ${glow * 0.6})`);
+      glowGradient.addColorStop(0.5, `rgba(150, 255, 100, ${glow * 0.2})`);
+      glowGradient.addColorStop(1, "rgba(100, 200, 80, 0)");
+      ctx.fillStyle = glowGradient;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.size * 4, 0, Math.PI * 2);
+      ctx.fill();
+      // Core
+      ctx.fillStyle = `rgba(220, 255, 200, ${glow})`;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.size * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Soft rain on window
+    ctx.strokeStyle = "rgba(150, 180, 220, 0.3)";
+    ctx.lineWidth = 1;
+    for (const r of rainDrops) {
+      ctx.globalAlpha = r.opacity;
+      ctx.beginPath();
+      ctx.moveTo(r.x, r.y);
+      ctx.lineTo(r.x - 2, r.y + r.length);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
   } else {
     // Matcha-inspired gradient background
     const gradient = ctx.createLinearGradient(0, 0, 0, height);
@@ -173,6 +468,42 @@ export function clearCanvas(context: CanvasContext, nightMode: boolean = false):
           ctx.fillRect(i, j, 10, 10);
         }
       }
+    }
+  }
+
+  // Ambient particles - soft floating dust motes (day mode only)
+  if (!nightMode) {
+    for (const p of ambientParticles) {
+      const shimmer = 0.7 + 0.3 * Math.sin(p.phase);
+      const alpha = p.opacity * shimmer * p.life; // life controls fade in/out
+
+      if (alpha < 0.01) continue; // Skip nearly invisible particles
+
+      // Outer glow
+      ctx.fillStyle = `rgba(255, 255, 240, ${alpha * 0.35})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Core
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.8})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Warmth wisps - gentle steam-like rising effect (day mode only)
+    for (const w of warmthWisps) {
+      const gradient = ctx.createRadialGradient(w.x, w.y, 0, w.x, w.y, w.size);
+      // Soft cream/white tones - less warm
+      gradient.addColorStop(0, `rgba(255, 252, 245, ${w.opacity * 1.4})`);
+      gradient.addColorStop(0.3, `rgba(255, 250, 240, ${w.opacity * 0.9})`);
+      gradient.addColorStop(0.6, `rgba(250, 248, 235, ${w.opacity * 0.4})`);
+      gradient.addColorStop(1, "rgba(245, 243, 230, 0)");
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(w.x, w.y, w.size, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 }
@@ -372,6 +703,8 @@ function drawFace(
   emotion: MochiEmotion,
   squishAmount: number,
   cheekColor: string,
+  blinkState: number = 0,
+  lookDirection: number = 0,
 ): void {
   const scale = radius / 50; // Scale face features based on size
   const eyeSpacing = 12 * scale;
@@ -381,19 +714,47 @@ function drawFace(
   const squishOffset = squishAmount * 5 * scale;
   const faceY = eyeY + squishOffset;
 
+  // Look direction offset for pupils
+  const lookOffset = lookDirection * eyeSize * 0.8;
+
   ctx.fillStyle = "#4A4A4A";
   ctx.strokeStyle = "#4A4A4A";
   ctx.lineWidth = Math.max(1.5, 2 * scale);
   ctx.lineCap = "round";
 
+  // Helper to draw blinking eyes (used by happy and other emotions)
+  const drawBlinkingEyes = (leftX: number, rightX: number, y: number, openSize: number) => {
+    if (blinkState > 0.3) {
+      // Eyes closed - draw curved lines
+      ctx.beginPath();
+      ctx.arc(leftX + lookOffset, y, openSize, Math.PI * 0.15, Math.PI * 0.85);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(rightX + lookOffset, y, openSize, Math.PI * 0.15, Math.PI * 0.85);
+      ctx.stroke();
+    } else if (blinkState > 0) {
+      // Eyes half closed
+      const closeAmount = blinkState / 0.3;
+      ctx.beginPath();
+      ctx.arc(leftX + lookOffset, y, openSize, Math.PI * (0.1 + 0.05 * closeAmount), Math.PI * (0.9 - 0.05 * closeAmount));
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(rightX + lookOffset, y, openSize, Math.PI * (0.1 + 0.05 * closeAmount), Math.PI * (0.9 - 0.05 * closeAmount));
+      ctx.stroke();
+    } else {
+      // Eyes open - normal happy eyes
+      ctx.beginPath();
+      ctx.arc(leftX + lookOffset, y, openSize, Math.PI * 0.1, Math.PI * 0.9);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(rightX + lookOffset, y, openSize, Math.PI * 0.1, Math.PI * 0.9);
+      ctx.stroke();
+    }
+  };
+
   switch (emotion) {
     case "happy":
-      ctx.beginPath();
-      ctx.arc(cx - eyeSpacing, faceY, eyeSize * 1.2, Math.PI * 0.1, Math.PI * 0.9);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(cx + eyeSpacing, faceY, eyeSize * 1.2, Math.PI * 0.1, Math.PI * 0.9);
-      ctx.stroke();
+      drawBlinkingEyes(cx - eyeSpacing, cx + eyeSpacing, faceY, eyeSize * 1.2);
       ctx.beginPath();
       ctx.arc(cx, faceY + 8 * scale, 6 * scale, Math.PI * 0.1, Math.PI * 0.9);
       ctx.stroke();
@@ -567,11 +928,96 @@ function drawFace(
       ctx.font = `${Math.max(6, 5 * scale)}px "Segoe UI", sans-serif`;
       ctx.fillText("z", cx + eyeSpacing * 2.2, faceY - eyeSize * 2.5);
       break;
+
+    case "yawning":
+      // Closed eyes (like sleepy but slightly different)
+      ctx.lineWidth = Math.max(2, 2.5 * scale);
+      ctx.lineCap = "round";
+
+      // Left eye - gentle curved closed eye, slightly scrunched
+      ctx.beginPath();
+      ctx.arc(
+        cx - eyeSpacing,
+        faceY + eyeSize * 0.2,
+        eyeSize * 0.9,
+        Math.PI * 0.2,
+        Math.PI * 0.8,
+      );
+      ctx.stroke();
+
+      // Right eye - gentle curved closed eye, slightly scrunched
+      ctx.beginPath();
+      ctx.arc(
+        cx + eyeSpacing,
+        faceY + eyeSize * 0.2,
+        eyeSize * 0.9,
+        Math.PI * 0.2,
+        Math.PI * 0.8,
+      );
+      ctx.stroke();
+
+      // Wide open yawning mouth (oval)
+      ctx.fillStyle = "#4A4A4A";
+      ctx.beginPath();
+      ctx.ellipse(cx, faceY + 10 * scale, 5 * scale, 7 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Tiny tongue
+      ctx.fillStyle = "#E8A0A0";
+      ctx.beginPath();
+      ctx.ellipse(cx, faceY + 14 * scale, 3 * scale, 2 * scale, 0, 0, Math.PI);
+      ctx.fill();
+      ctx.fillStyle = "#4A4A4A";
+      break;
+
+    case "stressed":
+      // Stressed/worried face - spiral eyes and wobbly mouth
+      ctx.lineWidth = Math.max(1.5, 2 * scale);
+      ctx.lineCap = "round";
+
+      // Spiral eyes (dizzy/stressed look)
+      const spiralSize = eyeSize * 1.2;
+      for (let side = -1; side <= 1; side += 2) {
+        const eyeX = cx + side * eyeSpacing;
+        ctx.beginPath();
+        // Draw a small spiral
+        for (let i = 0; i < 2.5; i += 0.1) {
+          const angle = i * Math.PI;
+          const r = spiralSize * (0.2 + i * 0.3);
+          const px = eyeX + Math.cos(angle) * r;
+          const py = faceY + Math.sin(angle) * r;
+          if (i === 0) {
+            ctx.moveTo(px, py);
+          } else {
+            ctx.lineTo(px, py);
+          }
+        }
+        ctx.stroke();
+      }
+
+      // Worried eyebrows (angled up in middle)
+      ctx.beginPath();
+      ctx.moveTo(cx - eyeSpacing - eyeSize, faceY - eyeSize * 1.8);
+      ctx.lineTo(cx - eyeSpacing + eyeSize * 0.5, faceY - eyeSize * 2.3);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx + eyeSpacing + eyeSize, faceY - eyeSize * 1.8);
+      ctx.lineTo(cx + eyeSpacing - eyeSize * 0.5, faceY - eyeSize * 2.3);
+      ctx.stroke();
+
+      // Wobbly/wavy worried mouth
+      ctx.beginPath();
+      ctx.moveTo(cx - 6 * scale, faceY + 8 * scale);
+      ctx.quadraticCurveTo(cx - 3 * scale, faceY + 10 * scale, cx, faceY + 8 * scale);
+      ctx.quadraticCurveTo(cx + 3 * scale, faceY + 6 * scale, cx + 6 * scale, faceY + 8 * scale);
+      ctx.stroke();
+      break;
   }
 
-  // Blush - extra big and rosy when squished!
+  // Blush - extra big and rosy when squished or stressed!
   const isSquished = emotion === "squished";
-  const blushOpacity = emotion === "surprised" || isSquished || emotion === "love" ? 0.7 : 0.35;
+  const isStressed = emotion === "stressed";
+  const blushOpacity = emotion === "surprised" || isSquished || emotion === "love" || isStressed ? 0.7 : 0.35;
   const blushWidth = isSquished ? 7 * scale : 5 * scale;
   const blushHeight = isSquished ? 4 * scale : 3 * scale;
 
@@ -726,11 +1172,22 @@ function drawEffects(ctx: CanvasRenderingContext2D): void {
     ctx.restore();
     ctx.globalAlpha = 1;
   }
+
+  // Draw dust poofs
+  for (const poof of dustPoofs) {
+    for (const p of poof.particles) {
+      if (p.life <= 0) continue;
+      ctx.fillStyle = `rgba(220, 210, 190, ${p.life * 0.5})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 }
 
 export function drawMochi(context: CanvasContext, mochi: Mochi, isPreview: boolean = false): void {
   const { ctx } = context;
-  const { points, color, cx, cy, radius, baseRadius, emotion, squishAmount, merging } = mochi;
+  const { points, color, cx, cy, radius, baseRadius, emotion, squishAmount, merging, blinkState, lookDirection } = mochi;
 
   // Merging animation
   if (merging) {
@@ -743,6 +1200,19 @@ export function drawMochi(context: CanvasContext, mochi: Mochi, isPreview: boole
   }
 
   const path = getSmoothPath(points);
+
+  // Warm ambient glow around mochi
+  if (!isPreview && !merging) {
+    const glowRadius = baseRadius * 1.5;
+    const glowGradient = ctx.createRadialGradient(cx, cy, baseRadius * 0.5, cx, cy, glowRadius);
+    glowGradient.addColorStop(0, `${color.primary}40`); // 25% opacity of primary color
+    glowGradient.addColorStop(0.5, `${color.primary}15`);
+    glowGradient.addColorStop(1, `${color.primary}00`);
+    ctx.fillStyle = glowGradient;
+    ctx.beginPath();
+    ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   // Shadow
   if (!isPreview) {
@@ -794,7 +1264,7 @@ export function drawMochi(context: CanvasContext, mochi: Mochi, isPreview: boole
 
   // Face
   if (!isPreview || baseRadius > 20) {
-    drawFace(ctx, cx, cy, radius, emotion, squishAmount, color.cheek);
+    drawFace(ctx, cx, cy, radius, emotion, squishAmount, color.cheek, blinkState, lookDirection);
   }
 
   if (merging) {
@@ -1133,9 +1603,9 @@ export function drawUI(
   let labelOffset: number;
 
   if (isSmallScreen) {
-    // Top right corner on small screens, below the sun/moon toggle
+    // Top right corner on small screens, well below the sun/moon toggle
     previewX = width - 55;
-    previewY = 130;
+    previewY = 160;
     labelOffset = 45;
   } else {
     // Left of container on larger screens
@@ -1144,19 +1614,17 @@ export function drawUI(
     labelOffset = 45;
   }
 
-  ctx.fillStyle = "#4A6741";
-  ctx.font = '14px "Segoe UI", sans-serif';
+  // Soft, cozy "next" label
+  ctx.fillStyle = "rgba(90, 120, 80, 0.5)";
+  ctx.font = '12px "Segoe UI", sans-serif';
   ctx.textAlign = "center";
-  ctx.fillText("NEXT", previewX, previewY - labelOffset);
+  ctx.fillText("next", previewX, previewY - labelOffset);
 
-  // Preview background - soft matcha tint
-  ctx.fillStyle = "rgba(200, 220, 190, 0.6)";
-  ctx.strokeStyle = "rgba(100, 130, 90, 0.4)";
-  ctx.lineWidth = 2;
+  // Preview background - very soft, subtle circle
+  ctx.fillStyle = "rgba(210, 225, 200, 0.4)";
   ctx.beginPath();
   ctx.arc(previewX, previewY, 35, 0, Math.PI * 2);
   ctx.fill();
-  ctx.stroke();
 
   // Draw preview mochi
   const tierData = mochiTiers[nextTier];
@@ -1329,6 +1797,85 @@ function drawWalkingCat(ctx: CanvasRenderingContext2D): void {
   ctx.restore();
 }
 
+function drawSpeakerIcon(ctx: CanvasRenderingContext2D, width: number, height: number, soundEnabled: boolean, nightMode: boolean): void {
+  const x = width - 30;
+  const y = height - 30;
+
+  ctx.save();
+
+  // Icon color
+  const iconColor = nightMode ? "rgba(200, 220, 255, 0.7)" : "rgba(90, 120, 80, 0.8)";
+  ctx.fillStyle = iconColor;
+  ctx.strokeStyle = iconColor;
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // Center offset to visually center the icon (speaker + waves)
+  const offsetX = soundEnabled ? -3 : -1;
+
+  // Speaker body (trapezoid-ish shape)
+  ctx.beginPath();
+  ctx.moveTo(x + offsetX - 5, y - 4);
+  ctx.lineTo(x + offsetX, y - 4);
+  ctx.lineTo(x + offsetX + 5, y - 8);
+  ctx.lineTo(x + offsetX + 5, y + 8);
+  ctx.lineTo(x + offsetX, y + 4);
+  ctx.lineTo(x + offsetX - 5, y + 4);
+  ctx.closePath();
+  ctx.fill();
+
+  if (soundEnabled) {
+    // Sound waves
+    ctx.beginPath();
+    ctx.arc(x + offsetX + 7, y, 5, -Math.PI * 0.4, Math.PI * 0.4);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x + offsetX + 7, y, 9, -Math.PI * 0.4, Math.PI * 0.4);
+    ctx.stroke();
+  } else {
+    // X mark when muted
+    ctx.beginPath();
+    ctx.moveTo(x + offsetX + 7, y - 5);
+    ctx.lineTo(x + offsetX + 14, y + 5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + offsetX + 14, y - 5);
+    ctx.lineTo(x + offsetX + 7, y + 5);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawVignette(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const radius = Math.max(width, height) * 0.75;
+
+  const gradient = ctx.createRadialGradient(centerX, centerY, radius * 0.25, centerX, centerY, radius);
+  gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
+  gradient.addColorStop(0.4, "rgba(0, 0, 0, 0)");
+  gradient.addColorStop(0.6, "rgba(35, 25, 15, 0.08)");
+  gradient.addColorStop(0.75, "rgba(30, 20, 10, 0.18)");
+  gradient.addColorStop(0.9, "rgba(25, 15, 5, 0.3)");
+  gradient.addColorStop(1, "rgba(20, 10, 0, 0.4)");
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+}
+
+function drawWarmOverlay(ctx: CanvasRenderingContext2D, width: number, height: number, nightMode: boolean): void {
+  if (nightMode) {
+    // Subtle cool blue tint at night
+    ctx.fillStyle = "rgba(100, 120, 150, 0.03)";
+  } else {
+    // Warm sepia-like tint during day
+    ctx.fillStyle = "rgba(255, 240, 220, 0.06)";
+  }
+  ctx.fillRect(0, 0, width, height);
+}
+
 function drawMoon(ctx: CanvasRenderingContext2D, width: number, height: number, nightMode: boolean): void {
   const isMobile = width < 500 || height < 700;
   const moonX = width - 35;
@@ -1458,4 +2005,11 @@ export function render(
 
   // Draw moon/sun toggle
   drawMoon(context.ctx, context.width, context.height, gameState.nightMode);
+
+  // Draw speaker toggle icon
+  drawSpeakerIcon(context.ctx, context.width, context.height, gameState.soundEnabled, gameState.nightMode);
+
+  // Apply cozy post-processing effects
+  drawWarmOverlay(context.ctx, context.width, context.height, gameState.nightMode);
+  drawVignette(context.ctx, context.width, context.height);
 }

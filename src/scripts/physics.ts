@@ -12,7 +12,7 @@ export const defaultConfig: PhysicsConfig = {
   springStiffness: 0.4, // Slightly softer for more squish
   damping: 0.9, // More damping to reduce jitter
   pressure: 1.3, // Slightly less pressure for more deformation
-  gravity: 0.7, // Faster falling
+  gravity: 0.6, // Slightly lighter feel
   mouseForce: 0.5,
   mouseRadius: 120,
   wallBounce: 0.3, // Less bouncy
@@ -271,6 +271,16 @@ export function createMochi(x: number, y: number, tier: number): Mochi {
     isDropping: false,
     hasLanded: false,
     settleTimer: 0,
+    // Animation states
+    blinkTimer: 60 + Math.random() * 180, // Random initial blink time
+    blinkState: 0,
+    lookDirection: 0,
+    lookTimer: 0,
+    idleTimer: 0,
+    // Jitter detection
+    jitterAmount: 0,
+    prevVx: 0,
+    prevVy: 0,
   };
 }
 
@@ -321,6 +331,28 @@ export function updateMochi(
   const velocity = calculateVelocity(points);
   const speed = Math.sqrt(velocity.vx ** 2 + velocity.vy ** 2);
 
+  // Jitter detection - look for rapid velocity direction changes
+  // Only check when moving at moderate speed (not stationary, not flying)
+  if (speed > 1 && speed < 12) {
+    // Check for velocity sign reversals (direction changes)
+    const xReversed = (mochi.prevVx > 0.5 && velocity.vx < -0.5) || (mochi.prevVx < -0.5 && velocity.vx > 0.5);
+    const yReversed = (mochi.prevVy > 0.5 && velocity.vy < -0.5) || (mochi.prevVy < -0.5 && velocity.vy > 0.5);
+
+    if (xReversed || yReversed) {
+      // Accumulate jitter - more jitter for faster reversals
+      const reversalStrength = Math.abs(velocity.vx - mochi.prevVx) + Math.abs(velocity.vy - mochi.prevVy);
+      mochi.jitterAmount += reversalStrength * 0.15 * dt;
+    }
+  }
+
+  // Decay jitter over time
+  mochi.jitterAmount *= Math.pow(0.92, dt);
+  if (mochi.jitterAmount < 0.1) mochi.jitterAmount = 0;
+
+  // Store current velocity for next frame's jitter detection
+  mochi.prevVx = velocity.vx;
+  mochi.prevVy = velocity.vy;
+
   // Calculate shape deformation (how far from a perfect circle)
   let deformation = 0;
   for (const p of points) {
@@ -336,19 +368,43 @@ export function updateMochi(
   mochi.emotionTimer -= dt;
   if (mochi.emotionTimer <= 0) {
     let newEmotion = mochi.emotion;
-    if (speed > 10) {
+    let newTimer = 30; // Default timer
+
+    if (mochi.jitterAmount > 2) {
+      // Stressed face when jittering a lot
+      newEmotion = "stressed";
+      newTimer = 15;
+    } else if (speed > 15) {
+      // Only show flying face at very high speeds
       newEmotion = "flying";
-    } else if (mochi.squishAmount > 0.4 || deformation > 0.2) {
-      // Show squished face when noticeably compressed
+      newTimer = 15;
+    } else if (mochi.squishAmount > 0.5 || deformation > 0.25) {
+      // Show squished face when heavily compressed
       newEmotion = "squished";
-    } else if (speed < 0.3 && mochi.squishAmount < 0.12 && deformation < 0.08) {
-      newEmotion = Math.random() > 0.2 ? "happy" : "sleepy";
-    } else if (mochi.squishAmount < 0.18 && speed < 3) {
-      newEmotion = "happy";
+      newTimer = 20;
+    } else if (speed < 0.5 && mochi.squishAmount < 0.15 && deformation < 0.1) {
+      // Settled - stay happy or sleepy, don't randomly switch between them
+      if (mochi.emotion !== "happy" && mochi.emotion !== "sleepy" && mochi.emotion !== "yawning") {
+        newEmotion = "happy";
+        newTimer = 120; // Long timer when settling into happy
+      } else {
+        // Keep current emotion, just refresh timer
+        newTimer = 60;
+      }
+    } else if (mochi.squishAmount < 0.2 && speed < 4) {
+      // Mild movement - return to happy
+      if (mochi.emotion !== "happy" && mochi.emotion !== "sleepy") {
+        newEmotion = "happy";
+        newTimer = 45;
+      }
     }
+
     if (newEmotion !== mochi.emotion) {
       mochi.emotion = newEmotion;
-      mochi.emotionTimer = newEmotion === "squished" ? 25 : 15;
+      mochi.emotionTimer = newTimer;
+    } else if (mochi.emotionTimer <= 0) {
+      // Same emotion, just refresh timer
+      mochi.emotionTimer = newTimer;
     }
   }
 
@@ -544,9 +600,9 @@ export function updateMochi(
     const squashAmount = Math.min(0.7, maxFloorImpact * 0.06);
     mochi.squishAmount = Math.max(mochi.squishAmount, squashAmount);
     mochi.wobbleIntensity = Math.min(2.5, mochi.wobbleIntensity + maxFloorImpact * 0.15);
-    if (maxFloorImpact > 4) {
+    if (maxFloorImpact > 5) {
       mochi.emotion = "squished";
-      mochi.emotionTimer = Math.min(35, maxFloorImpact * 3);
+      mochi.emotionTimer = Math.min(20, maxFloorImpact * 2);
     }
   }
 
