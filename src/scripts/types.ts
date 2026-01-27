@@ -87,7 +87,8 @@ export interface GameState {
   highScore: number;
   gameOver: boolean;
   currentMochi: Mochi | null;
-  nextTier: number;
+  currentTier: number; // The tier player is about to drop
+  nextTier: number; // The tier shown in "next" preview
   dropX: number;
   canDrop: boolean;
   container: Container;

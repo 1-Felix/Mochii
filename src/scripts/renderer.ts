@@ -1975,12 +1975,12 @@ export function render(
   clearCanvas(context, gameState.nightMode);
   drawContainer(context, gameState.container, gameState.nightMode);
 
-  // Draw drop preview
+  // Draw drop preview (shows the mochi player is about to drop)
   if (gameState.canDrop && !gameState.gameOver) {
     drawDropPreview(
       context,
       gameState.dropX,
-      gameState.currentMochi?.tier ?? gameState.nextTier,
+      gameState.currentMochi?.tier ?? gameState.currentTier,
       gameState.container,
     );
   }

@@ -114,7 +114,8 @@ function initGameState(): void {
     highScore: parseInt(localStorage.getItem('mochiHighScore') || '0'),
     gameOver: false,
     currentMochi: null,
-    nextTier: getRandomDroppableTier(),
+    currentTier: getRandomDroppableTier(), // What player is about to drop
+    nextTier: getRandomDroppableTier(), // What's shown in "next" preview
     dropX: container.x + container.width / 2,
     canDrop: true,
     container,
@@ -140,7 +141,7 @@ function dropMochi(x: number): void {
   if (!gameState.canDrop || gameState.gameOver || dropCooldown > 0) return;
 
   const container = gameState.container;
-  const tier = gameState.nextTier;
+  const tier = gameState.currentTier; // Use current tier for drop
   const tierData = mochiTiers[tier];
 
   // Clamp X within container
@@ -161,7 +162,8 @@ function dropMochi(x: number): void {
 
   mochis.push(mochi);
 
-  // Prepare next mochi
+  // Cycle tiers: current becomes next, next becomes new random
+  gameState.currentTier = gameState.nextTier;
   gameState.nextTier = getRandomDroppableTier();
   gameState.canDrop = false;
   dropCooldown = DROP_COOLDOWN;
