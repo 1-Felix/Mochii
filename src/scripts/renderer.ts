@@ -1,6 +1,16 @@
-import type { Mochi, CanvasContext, MochiEmotion, Container, GameState, MergeEffect, ImpactStar, CherryBlossom, WalkingCat } from './types';
-import { mochiTiers } from './physics';
-import type { LeaderboardEntry } from './leaderboard';
+import type {
+  Mochi,
+  CanvasContext,
+  MochiEmotion,
+  Container,
+  GameState,
+  MergeEffect,
+  ImpactStar,
+  CherryBlossom,
+  WalkingCat,
+} from "./types";
+import { mochiTiers } from "./physics";
+import type { LeaderboardEntry } from "./leaderboard";
 
 // Visual effects storage
 const mergeEffects: MergeEffect[] = [];
@@ -12,7 +22,7 @@ const walkingCat: WalkingCat = { x: -50, y: 0, direction: 1, frame: 0, active: f
 
 // Cat sprite
 const catSprite = new Image();
-catSprite.src = '/sprites/cat_walk_12_frames_right_to_left.png';
+catSprite.src = "/sprites/cat_walk_12_frames_right_to_left.png";
 const CAT_FRAMES = 12;
 let catFrameWidth = 0;
 let catFrameHeight = 0;
@@ -69,16 +79,18 @@ export function updateEasterEggs(dt: number): void {
     walkingCat.frame += 0.15 * dt;
 
     // Check if cat has walked off screen
-    if ((walkingCat.direction > 0 && walkingCat.x > 1000) ||
-        (walkingCat.direction < 0 && walkingCat.x < -50)) {
+    if (
+      (walkingCat.direction > 0 && walkingCat.x > 1000) ||
+      (walkingCat.direction < 0 && walkingCat.x < -50)
+    ) {
       walkingCat.active = false;
     }
   }
 }
 
 export function createCanvasContext(canvas: HTMLCanvasElement): CanvasContext {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Could not get 2d context');
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not get 2d context");
 
   return {
     canvas,
@@ -110,14 +122,14 @@ export function clearCanvas(context: CanvasContext, nightMode: boolean = false):
   if (nightMode) {
     // Cozy night mode gradient
     const gradient = ctx.createLinearGradient(0, 0, 0, height);
-    gradient.addColorStop(0, '#2A3A4A'); // Deep night blue
-    gradient.addColorStop(0.5, '#1E2D3D'); // Darker blue
-    gradient.addColorStop(1, '#152535'); // Deep night
+    gradient.addColorStop(0, "#2A3A4A"); // Deep night blue
+    gradient.addColorStop(0.5, "#1E2D3D"); // Darker blue
+    gradient.addColorStop(1, "#152535"); // Deep night
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
 
     // Stars
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
     for (let i = 0; i < 30; i++) {
       const starX = (i * 137) % width;
       const starY = (i * 89) % (height * 0.4);
@@ -128,7 +140,7 @@ export function clearCanvas(context: CanvasContext, nightMode: boolean = false):
     }
 
     // Soft texture
-    ctx.fillStyle = 'rgba(100, 120, 150, 0.03)';
+    ctx.fillStyle = "rgba(100, 120, 150, 0.03)";
     for (let i = 0; i < width; i += 20) {
       for (let j = 0; j < height; j += 20) {
         if ((i + j) % 40 === 0) {
@@ -139,14 +151,14 @@ export function clearCanvas(context: CanvasContext, nightMode: boolean = false):
   } else {
     // Matcha-inspired gradient background
     const gradient = ctx.createLinearGradient(0, 0, 0, height);
-    gradient.addColorStop(0, '#E8F0E4'); // Light matcha cream
-    gradient.addColorStop(0.5, '#D4E4D1'); // Soft matcha
-    gradient.addColorStop(1, '#C5D9BE'); // Deeper matcha
+    gradient.addColorStop(0, "#E8F0E4"); // Light matcha cream
+    gradient.addColorStop(0.5, "#D4E4D1"); // Soft matcha
+    gradient.addColorStop(1, "#C5D9BE"); // Deeper matcha
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
 
     // Subtle pattern overlay for texture
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+    ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
     for (let i = 0; i < width; i += 20) {
       for (let j = 0; j < height; j += 20) {
         if ((i + j) % 40 === 0) {
@@ -162,15 +174,15 @@ export function drawContainer(context: CanvasContext, container: Container): voi
   const { x, y, width, height, wallThickness, overflowLine } = container;
 
   // Container shadow (softer, green-tinted)
-  ctx.fillStyle = 'rgba(60, 80, 50, 0.15)';
+  ctx.fillStyle = "rgba(60, 80, 50, 0.15)";
   ctx.beginPath();
   ctx.roundRect(x + 4, y + 4, width, height, 12);
   ctx.fill();
 
   // Container background (inside) - soft matcha green
   const innerGradient = ctx.createLinearGradient(x, y, x, y + height);
-  innerGradient.addColorStop(0, 'rgba(220, 235, 210, 0.85)');
-  innerGradient.addColorStop(1, 'rgba(200, 220, 190, 0.9)');
+  innerGradient.addColorStop(0, "rgba(220, 235, 210, 0.85)");
+  innerGradient.addColorStop(1, "rgba(200, 220, 190, 0.9)");
   ctx.fillStyle = innerGradient;
   ctx.beginPath();
   ctx.roundRect(x + wallThickness, y, width - wallThickness * 2, height - wallThickness, 8);
@@ -178,12 +190,12 @@ export function drawContainer(context: CanvasContext, container: Container): voi
 
   // Container walls - natural bamboo/wood green
   const wallGradient = ctx.createLinearGradient(x, y, x + wallThickness, y);
-  wallGradient.addColorStop(0, '#7A9B6D'); // Bamboo green
-  wallGradient.addColorStop(0.5, '#8DAA7F');
-  wallGradient.addColorStop(1, '#7A9B6D');
+  wallGradient.addColorStop(0, "#7A9B6D"); // Bamboo green
+  wallGradient.addColorStop(0.5, "#8DAA7F");
+  wallGradient.addColorStop(1, "#7A9B6D");
 
   ctx.fillStyle = wallGradient;
-  ctx.strokeStyle = '#5C7A52';
+  ctx.strokeStyle = "#5C7A52";
   ctx.lineWidth = 2;
 
   // Left wall
@@ -194,9 +206,9 @@ export function drawContainer(context: CanvasContext, container: Container): voi
 
   // Right wall
   const rightWallGradient = ctx.createLinearGradient(x + width - wallThickness, y, x + width, y);
-  rightWallGradient.addColorStop(0, '#7A9B6D');
-  rightWallGradient.addColorStop(0.5, '#8DAA7F');
-  rightWallGradient.addColorStop(1, '#7A9B6D');
+  rightWallGradient.addColorStop(0, "#7A9B6D");
+  rightWallGradient.addColorStop(0.5, "#8DAA7F");
+  rightWallGradient.addColorStop(1, "#7A9B6D");
   ctx.fillStyle = rightWallGradient;
   ctx.beginPath();
   ctx.roundRect(x + width - wallThickness, y, wallThickness, height, [0, 12, 12, 0]);
@@ -205,8 +217,8 @@ export function drawContainer(context: CanvasContext, container: Container): voi
 
   // Bottom wall
   const bottomWallGradient = ctx.createLinearGradient(x, y + height - wallThickness, x, y + height);
-  bottomWallGradient.addColorStop(0, '#8DAA7F');
-  bottomWallGradient.addColorStop(1, '#6B8A5E');
+  bottomWallGradient.addColorStop(0, "#8DAA7F");
+  bottomWallGradient.addColorStop(1, "#6B8A5E");
   ctx.fillStyle = bottomWallGradient;
   ctx.beginPath();
   ctx.roundRect(x, y + height - wallThickness, width, wallThickness, [0, 0, 12, 12]);
@@ -214,7 +226,7 @@ export function drawContainer(context: CanvasContext, container: Container): voi
   ctx.stroke();
 
   // Danger line (softer, matcha-tinted red)
-  ctx.strokeStyle = 'rgba(180, 90, 90, 0.5)';
+  ctx.strokeStyle = "rgba(180, 90, 90, 0.5)";
   ctx.lineWidth = 2;
   ctx.setLineDash([8, 8]);
   ctx.beginPath();
@@ -225,7 +237,10 @@ export function drawContainer(context: CanvasContext, container: Container): voi
 }
 
 // Chaikin smoothing for organic shapes
-function smoothPoints(points: { x: number; y: number }[], iterations: number = 2): { x: number; y: number }[] {
+function smoothPoints(
+  points: { x: number; y: number }[],
+  iterations: number = 2,
+): { x: number; y: number }[] {
   let result = [...points];
 
   for (let iter = 0; iter < iterations; iter++) {
@@ -280,7 +295,7 @@ function drawFace(
   radius: number,
   emotion: MochiEmotion,
   squishAmount: number,
-  cheekColor: string
+  cheekColor: string,
 ): void {
   const scale = radius / 50; // Scale face features based on size
   const eyeSpacing = 12 * scale;
@@ -290,13 +305,13 @@ function drawFace(
   const squishOffset = squishAmount * 5 * scale;
   const faceY = eyeY + squishOffset;
 
-  ctx.fillStyle = '#4A4A4A';
-  ctx.strokeStyle = '#4A4A4A';
+  ctx.fillStyle = "#4A4A4A";
+  ctx.strokeStyle = "#4A4A4A";
   ctx.lineWidth = Math.max(1.5, 2 * scale);
-  ctx.lineCap = 'round';
+  ctx.lineCap = "round";
 
   switch (emotion) {
-    case 'happy':
+    case "happy":
       ctx.beginPath();
       ctx.arc(cx - eyeSpacing, faceY, eyeSize * 1.2, Math.PI * 0.1, Math.PI * 0.9);
       ctx.stroke();
@@ -308,7 +323,7 @@ function drawFace(
       ctx.stroke();
       break;
 
-    case 'surprised':
+    case "surprised":
       ctx.beginPath();
       ctx.arc(cx - eyeSpacing, faceY, eyeSize * 1.5, 0, Math.PI * 2);
       ctx.fill();
@@ -320,20 +335,30 @@ function drawFace(
       ctx.stroke();
       break;
 
-    case 'squished':
+    case "squished":
       // Cute squeezed eyes (curved lines like >_<)
       ctx.lineWidth = Math.max(2, 2.5 * scale);
 
       // Left eye - curved squeeze
       ctx.beginPath();
       ctx.moveTo(cx - eyeSpacing - eyeSize, faceY - eyeSize * 0.6);
-      ctx.quadraticCurveTo(cx - eyeSpacing + eyeSize * 0.5, faceY, cx - eyeSpacing - eyeSize, faceY + eyeSize * 0.6);
+      ctx.quadraticCurveTo(
+        cx - eyeSpacing + eyeSize * 0.5,
+        faceY,
+        cx - eyeSpacing - eyeSize,
+        faceY + eyeSize * 0.6,
+      );
       ctx.stroke();
 
       // Right eye - curved squeeze
       ctx.beginPath();
       ctx.moveTo(cx + eyeSpacing + eyeSize, faceY - eyeSize * 0.6);
-      ctx.quadraticCurveTo(cx + eyeSpacing - eyeSize * 0.5, faceY, cx + eyeSpacing + eyeSize, faceY + eyeSize * 0.6);
+      ctx.quadraticCurveTo(
+        cx + eyeSpacing - eyeSize * 0.5,
+        faceY,
+        cx + eyeSpacing + eyeSize,
+        faceY + eyeSize * 0.6,
+      );
       ctx.stroke();
 
       // Cute worried mouth (small wobbly line)
@@ -343,13 +368,23 @@ function drawFace(
       ctx.stroke();
 
       // Sweat drop
-      ctx.fillStyle = 'rgba(150, 200, 255, 0.7)';
+      ctx.fillStyle = "rgba(150, 200, 255, 0.7)";
       ctx.beginPath();
       ctx.moveTo(cx + eyeSpacing * 1.8, faceY - eyeSize * 2);
-      ctx.quadraticCurveTo(cx + eyeSpacing * 1.8 + 3 * scale, faceY - eyeSize, cx + eyeSpacing * 1.8, faceY);
-      ctx.quadraticCurveTo(cx + eyeSpacing * 1.8 - 3 * scale, faceY - eyeSize, cx + eyeSpacing * 1.8, faceY - eyeSize * 2);
+      ctx.quadraticCurveTo(
+        cx + eyeSpacing * 1.8 + 3 * scale,
+        faceY - eyeSize,
+        cx + eyeSpacing * 1.8,
+        faceY,
+      );
+      ctx.quadraticCurveTo(
+        cx + eyeSpacing * 1.8 - 3 * scale,
+        faceY - eyeSize,
+        cx + eyeSpacing * 1.8,
+        faceY - eyeSize * 2,
+      );
       ctx.fill();
-      ctx.fillStyle = '#4A4A4A';
+      ctx.fillStyle = "#4A4A4A";
 
       // Extra blush lines (anime style)
       ctx.strokeStyle = cheekColor;
@@ -370,54 +405,78 @@ function drawFace(
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = '#4A4A4A';
+      ctx.strokeStyle = "#4A4A4A";
       break;
 
-    case 'flying':
+    case "flying":
       ctx.beginPath();
       ctx.arc(cx - eyeSpacing, faceY, eyeSize * 1.3, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
       ctx.arc(cx + eyeSpacing, faceY, eyeSize * 1.3, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#FFFFFF';
+      ctx.fillStyle = "#FFFFFF";
       ctx.beginPath();
-      ctx.arc(cx - eyeSpacing - eyeSize * 0.4, faceY - eyeSize * 0.4, eyeSize * 0.4, 0, Math.PI * 2);
+      ctx.arc(
+        cx - eyeSpacing - eyeSize * 0.4,
+        faceY - eyeSize * 0.4,
+        eyeSize * 0.4,
+        0,
+        Math.PI * 2,
+      );
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(cx + eyeSpacing - eyeSize * 0.4, faceY - eyeSize * 0.4, eyeSize * 0.4, 0, Math.PI * 2);
+      ctx.arc(
+        cx + eyeSpacing - eyeSize * 0.4,
+        faceY - eyeSize * 0.4,
+        eyeSize * 0.4,
+        0,
+        Math.PI * 2,
+      );
       ctx.fill();
-      ctx.fillStyle = '#4A4A4A';
+      ctx.fillStyle = "#4A4A4A";
       ctx.beginPath();
       ctx.arc(cx, faceY + 7 * scale, 7 * scale, 0, Math.PI);
       ctx.fill();
       break;
 
-    case 'love':
+    case "love":
       // Heart eyes
-      ctx.fillStyle = '#FF6B8A';
+      ctx.fillStyle = "#FF6B8A";
       const heartSize = eyeSize * 1.5;
       drawHeart(ctx, cx - eyeSpacing, faceY, heartSize);
       drawHeart(ctx, cx + eyeSpacing, faceY, heartSize);
-      ctx.fillStyle = '#4A4A4A';
+      ctx.fillStyle = "#4A4A4A";
       ctx.beginPath();
       ctx.arc(cx, faceY + 8 * scale, 5 * scale, Math.PI * 0.1, Math.PI * 0.9);
       ctx.stroke();
       break;
 
-    case 'sleepy':
+    case "sleepy":
       // Soft closed eyes (curved lines like peaceful sleep)
       ctx.lineWidth = Math.max(2, 2.5 * scale);
-      ctx.lineCap = 'round';
+      ctx.lineCap = "round";
 
       // Left eye - gentle curved closed eye
       ctx.beginPath();
-      ctx.arc(cx - eyeSpacing, faceY + eyeSize * 0.3, eyeSize * 1.1, Math.PI * 0.15, Math.PI * 0.85);
+      ctx.arc(
+        cx - eyeSpacing,
+        faceY + eyeSize * 0.3,
+        eyeSize * 1.1,
+        Math.PI * 0.15,
+        Math.PI * 0.85,
+      );
       ctx.stroke();
 
       // Right eye - gentle curved closed eye
       ctx.beginPath();
-      ctx.arc(cx + eyeSpacing, faceY + eyeSize * 0.3, eyeSize * 1.1, Math.PI * 0.15, Math.PI * 0.85);
+      ctx.arc(
+        cx + eyeSpacing,
+        faceY + eyeSize * 0.3,
+        eyeSize * 1.1,
+        Math.PI * 0.15,
+        Math.PI * 0.85,
+      );
       ctx.stroke();
 
       // Content little smile
@@ -426,17 +485,17 @@ function drawFace(
       ctx.stroke();
 
       // Cozy zzz (small, subtle)
-      ctx.fillStyle = 'rgba(74, 74, 74, 0.4)';
+      ctx.fillStyle = "rgba(74, 74, 74, 0.4)";
       ctx.font = `${Math.max(8, 7 * scale)}px "Segoe UI", sans-serif`;
-      ctx.fillText('z', cx + eyeSpacing * 1.8, faceY - eyeSize * 1.5);
+      ctx.fillText("z", cx + eyeSpacing * 1.8, faceY - eyeSize * 1.5);
       ctx.font = `${Math.max(6, 5 * scale)}px "Segoe UI", sans-serif`;
-      ctx.fillText('z', cx + eyeSpacing * 2.2, faceY - eyeSize * 2.5);
+      ctx.fillText("z", cx + eyeSpacing * 2.2, faceY - eyeSize * 2.5);
       break;
   }
 
   // Blush - extra big and rosy when squished!
-  const isSquished = emotion === 'squished';
-  const blushOpacity = emotion === 'surprised' || isSquished || emotion === 'love' ? 0.7 : 0.35;
+  const isSquished = emotion === "squished";
+  const blushOpacity = emotion === "surprised" || isSquished || emotion === "love" ? 0.7 : 0.35;
   const blushWidth = isSquished ? 7 * scale : 5 * scale;
   const blushHeight = isSquished ? 4 * scale : 3 * scale;
 
@@ -460,7 +519,7 @@ function drawHeart(ctx: CanvasRenderingContext2D, x: number, y: number, size: nu
 }
 
 export function addMergeEffect(x: number, y: number, radius: number, color: string): void {
-  const particles: MergeEffect['particles'] = [];
+  const particles: MergeEffect["particles"] = [];
   const numParticles = 12;
 
   for (let i = 0; i < numParticles; i++) {
@@ -613,7 +672,7 @@ export function drawMochi(context: CanvasContext, mochi: Mochi, isPreview: boole
   if (!isPreview) {
     ctx.save();
     ctx.translate(0, 8 + squishAmount * 4);
-    ctx.filter = 'blur(12px)';
+    ctx.filter = "blur(12px)";
     ctx.fillStyle = color.shadow;
     ctx.fill(path);
     ctx.restore();
@@ -626,7 +685,7 @@ export function drawMochi(context: CanvasContext, mochi: Mochi, isPreview: boole
     0,
     cx,
     cy,
-    baseRadius * 1.2
+    baseRadius * 1.2,
   );
   gradient.addColorStop(0, color.highlight);
   gradient.addColorStop(0.3, color.primary);
@@ -649,11 +708,11 @@ export function drawMochi(context: CanvasContext, mochi: Mochi, isPreview: boole
     0,
     cx - baseRadius * 0.15,
     cy - baseRadius * 0.3,
-    baseRadius * 0.45
+    baseRadius * 0.45,
   );
-  highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.5)');
-  highlightGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.15)');
-  highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  highlightGradient.addColorStop(0, "rgba(255, 255, 255, 0.5)");
+  highlightGradient.addColorStop(0.5, "rgba(255, 255, 255, 0.15)");
+  highlightGradient.addColorStop(1, "rgba(255, 255, 255, 0)");
   ctx.fillStyle = highlightGradient;
   ctx.fill(path);
 
@@ -669,13 +728,28 @@ export function drawMochi(context: CanvasContext, mochi: Mochi, isPreview: boole
 }
 
 // Animation state for progression wheel hover effects
-const wheelAnimations: { scale: number; targetScale: number; velocity: number; wasHovered: boolean }[] =
-  Array.from({ length: 11 }, () => ({ scale: 1, targetScale: 1, velocity: 0, wasHovered: false }));
+const wheelAnimations: {
+  scale: number;
+  targetScale: number;
+  velocity: number;
+  wasHovered: boolean;
+}[] = Array.from({ length: 11 }, () => ({
+  scale: 1,
+  targetScale: 1,
+  velocity: 0,
+  wasHovered: false,
+}));
 
 // Tooltip animation state
 const tooltipAnim = { opacity: 0, offsetX: 0, currentTier: -1 };
 
-function drawProgressionWheel(context: CanvasContext, container: Container, currentTier: number, mouseX: number, mouseY: number): void {
+function drawProgressionWheel(
+  context: CanvasContext,
+  container: Container,
+  currentTier: number,
+  mouseX: number,
+  mouseY: number,
+): void {
   const { ctx } = context;
 
   // Position to the right of the container
@@ -685,12 +759,17 @@ function drawProgressionWheel(context: CanvasContext, container: Container, curr
   const hoverRadius = 20; // Hover detection radius
 
   // Background panel - matcha themed
-  const panelGradient = ctx.createLinearGradient(wheelX - 28, wheelStartY, wheelX + 28, wheelStartY);
-  panelGradient.addColorStop(0, 'rgba(200, 220, 190, 0.6)');
-  panelGradient.addColorStop(0.5, 'rgba(220, 235, 210, 0.7)');
-  panelGradient.addColorStop(1, 'rgba(200, 220, 190, 0.6)');
+  const panelGradient = ctx.createLinearGradient(
+    wheelX - 28,
+    wheelStartY,
+    wheelX + 28,
+    wheelStartY,
+  );
+  panelGradient.addColorStop(0, "rgba(200, 220, 190, 0.6)");
+  panelGradient.addColorStop(0.5, "rgba(220, 235, 210, 0.7)");
+  panelGradient.addColorStop(1, "rgba(200, 220, 190, 0.6)");
   ctx.fillStyle = panelGradient;
-  ctx.strokeStyle = 'rgba(100, 130, 90, 0.5)';
+  ctx.strokeStyle = "rgba(100, 130, 90, 0.5)";
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.roundRect(wheelX - 28, wheelStartY - 20, 56, spacing * 10 + 50, 12);
@@ -763,7 +842,7 @@ function drawProgressionWheel(context: CanvasContext, container: Container, curr
       0,
       wheelX,
       y + offsetY,
-      displayRadius * 1.2 * finalScale
+      displayRadius * 1.2 * finalScale,
     );
     gradient.addColorStop(0, tier.color.highlight);
     gradient.addColorStop(0.3, tier.color.primary);
@@ -784,7 +863,7 @@ function drawProgressionWheel(context: CanvasContext, container: Container, curr
     // Draw arrow to next tier (except for last) - matcha colored
     if (i < mochiTiers.length - 1) {
       const arrowY = y + spacing / 2;
-      ctx.fillStyle = 'rgba(100, 130, 90, 0.5)';
+      ctx.fillStyle = "rgba(100, 130, 90, 0.5)";
       ctx.beginPath();
       ctx.moveTo(wheelX, arrowY - 4);
       ctx.lineTo(wheelX + 5, arrowY + 4);
@@ -831,7 +910,7 @@ function drawProgressionWheel(context: CanvasContext, container: Container, curr
     ctx.globalAlpha = tooltipAnim.opacity;
 
     // Tooltip background - softer, rounder
-    ctx.fillStyle = 'rgba(55, 75, 45, 0.92)';
+    ctx.fillStyle = "rgba(55, 75, 45, 0.92)";
     ctx.beginPath();
     ctx.roundRect(tooltipLeft, tooltipY - 11, tooltipWidth, 22, 8);
     ctx.fill();
@@ -845,16 +924,21 @@ function drawProgressionWheel(context: CanvasContext, container: Container, curr
     ctx.fill();
 
     // Tooltip text - centered
-    ctx.fillStyle = '#F4FCF0';
-    ctx.textAlign = 'center';
+    ctx.fillStyle = "#F4FCF0";
+    ctx.textAlign = "center";
     ctx.fillText(tier.name, tooltipLeft + tooltipWidth / 2, tooltipY + 4);
-    ctx.textAlign = 'left';
+    ctx.textAlign = "left";
 
     ctx.globalAlpha = 1;
   }
 }
 
-function drawLeaderboard(context: CanvasContext, leaderboard: LeaderboardEntry[], playerName: string, container: Container): void {
+function drawLeaderboard(
+  context: CanvasContext,
+  leaderboard: LeaderboardEntry[],
+  playerName: string,
+  container: Container,
+): void {
   const { ctx } = context;
 
   const panelX = 20;
@@ -877,8 +961,8 @@ function drawLeaderboard(context: CanvasContext, leaderboard: LeaderboardEntry[]
   if (titleOpacity > 0) {
     ctx.fillStyle = `rgba(90, 120, 80, ${0.5 * titleOpacity})`;
     ctx.font = '13px "Segoe UI", sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('leaderboard', panelX, panelY);
+    ctx.textAlign = "left";
+    ctx.fillText("Leaderboard", panelX, panelY);
   }
 
   // Entries - soft and cozy
@@ -891,11 +975,11 @@ function drawLeaderboard(context: CanvasContext, leaderboard: LeaderboardEntry[]
     if (opacity1 > 0) {
       ctx.fillStyle = `rgba(90, 120, 80, ${0.4 * opacity1})`;
       ctx.font = '13px "Segoe UI", sans-serif';
-      ctx.fillText('no scores yet...', panelX, emptyY1);
+      ctx.fillText("no scores yet...", panelX, emptyY1);
     }
     if (opacity2 > 0) {
       ctx.fillStyle = `rgba(90, 120, 80, ${0.4 * opacity2})`;
-      ctx.fillText('be the first! ♡', panelX, emptyY2);
+      ctx.fillText("be the first! ♡", panelX, emptyY2);
     }
   } else {
     for (let i = 0; i < Math.min(10, leaderboard.length); i++) {
@@ -916,26 +1000,31 @@ function drawLeaderboard(context: CanvasContext, leaderboard: LeaderboardEntry[]
       }
 
       // Rank - very subtle
-      const baseOpacity = isPlayer ? 0.7 : 0.4 - (i * 0.02);
+      const baseOpacity = isPlayer ? 0.7 : 0.4 - i * 0.02;
       ctx.fillStyle = `rgba(70, 100, 60, ${baseOpacity * yOpacity})`;
       ctx.font = isPlayer ? '600 14px "Segoe UI", sans-serif' : '14px "Segoe UI", sans-serif';
-      ctx.textAlign = 'left';
+      ctx.textAlign = "left";
       ctx.fillText(`${i + 1}`, panelX, y);
 
       // Name (truncated)
-      const displayName = entry.name.length > 14 ? entry.name.slice(0, 13) + '…' : entry.name;
+      const displayName = entry.name.length > 14 ? entry.name.slice(0, 13) + "…" : entry.name;
       ctx.fillText(displayName, panelX + 22, y);
 
       // Score - aligned right
-      ctx.textAlign = 'right';
+      ctx.textAlign = "right";
       ctx.fillText(entry.score.toString(), panelX + panelWidth - 10, y);
     }
   }
 
-  ctx.textAlign = 'left';
+  ctx.textAlign = "left";
 }
 
-export function drawUI(context: CanvasContext, gameState: GameState, leaderboard?: LeaderboardEntry[], playerName?: string): void {
+export function drawUI(
+  context: CanvasContext,
+  gameState: GameState,
+  leaderboard?: LeaderboardEntry[],
+  playerName?: string,
+): void {
   const { ctx, width } = context;
   const { score, highScore, nextTier, gameOver, container, mouseX, mouseY } = gameState;
 
@@ -944,22 +1033,22 @@ export function drawUI(context: CanvasContext, gameState: GameState, leaderboard
   const isSmallScreen = spaceOnRight < 80;
 
   // Score - matcha green text
-  ctx.fillStyle = '#4A6741';
+  ctx.fillStyle = "#4A6741";
   ctx.font = 'bold 24px "Segoe UI", sans-serif';
-  ctx.textAlign = 'left';
+  ctx.textAlign = "left";
   const scoreText = `Score: ${score}`;
   ctx.fillText(scoreText, 20, 35);
 
   // Player name - very subtle, to the right of score
   if (playerName) {
     const scoreWidth = ctx.measureText(scoreText).width;
-    ctx.fillStyle = 'rgba(90, 120, 80, 0.45)';
+    ctx.fillStyle = "rgba(90, 120, 80, 0.45)";
     ctx.font = '12px "Segoe UI", sans-serif';
     ctx.fillText(playerName, 20 + scoreWidth + 10, 35);
   }
 
   ctx.font = '16px "Segoe UI", sans-serif';
-  ctx.fillStyle = '#6B8A5E';
+  ctx.fillStyle = "#6B8A5E";
   ctx.fillText(`Best: ${highScore}`, 20, 58);
 
   // Next mochi preview - position changes based on screen size
@@ -979,14 +1068,14 @@ export function drawUI(context: CanvasContext, gameState: GameState, leaderboard
     labelOffset = 45;
   }
 
-  ctx.fillStyle = '#4A6741';
+  ctx.fillStyle = "#4A6741";
   ctx.font = '14px "Segoe UI", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('NEXT', previewX, previewY - labelOffset);
+  ctx.textAlign = "center";
+  ctx.fillText("NEXT", previewX, previewY - labelOffset);
 
   // Preview background - soft matcha tint
-  ctx.fillStyle = 'rgba(200, 220, 190, 0.6)';
-  ctx.strokeStyle = 'rgba(100, 130, 90, 0.4)';
+  ctx.fillStyle = "rgba(200, 220, 190, 0.6)";
+  ctx.strokeStyle = "rgba(100, 130, 90, 0.4)";
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(previewX, previewY, 35, 0, Math.PI * 2);
@@ -1025,36 +1114,41 @@ export function drawUI(context: CanvasContext, gameState: GameState, leaderboard
   // Game over overlay - matcha themed
   if (gameOver) {
     // Semi-transparent matcha overlay
-    ctx.fillStyle = 'rgba(60, 80, 50, 0.75)';
+    ctx.fillStyle = "rgba(60, 80, 50, 0.75)";
     ctx.fillRect(0, 0, width, context.height);
 
     // Decorative panel
     const panelX = width / 2;
     const panelY = context.height / 2;
-    ctx.fillStyle = 'rgba(230, 240, 225, 0.95)';
-    ctx.strokeStyle = '#7A9B6D';
+    ctx.fillStyle = "rgba(230, 240, 225, 0.95)";
+    ctx.strokeStyle = "#7A9B6D";
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.roundRect(panelX - 150, panelY - 80, 300, 180, 16);
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = '#3D5A3A';
+    ctx.fillStyle = "#3D5A3A";
     ctx.font = 'bold 36px "Segoe UI", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Game Over', panelX, panelY - 30);
+    ctx.textAlign = "center";
+    ctx.fillText("Game Over", panelX, panelY - 30);
 
     ctx.font = '22px "Segoe UI", sans-serif';
-    ctx.fillStyle = '#4A6741';
+    ctx.fillStyle = "#4A6741";
     ctx.fillText(`Final Score: ${score}`, panelX, panelY + 15);
 
     ctx.font = '16px "Segoe UI", sans-serif';
-    ctx.fillStyle = '#6B8A5E';
-    ctx.fillText('Click to play again', panelX, panelY + 55);
+    ctx.fillStyle = "#6B8A5E";
+    ctx.fillText("Click to play again", panelX, panelY + 55);
   }
 }
 
-export function drawDropPreview(context: CanvasContext, x: number, tier: number, container: Container): void {
+export function drawDropPreview(
+  context: CanvasContext,
+  x: number,
+  tier: number,
+  container: Container,
+): void {
   const { ctx } = context;
   const tierData = mochiTiers[tier];
 
@@ -1064,7 +1158,7 @@ export function drawDropPreview(context: CanvasContext, x: number, tier: number,
   const clampedX = Math.max(minX, Math.min(maxX, x));
 
   // Drop line - matcha colored
-  ctx.strokeStyle = 'rgba(100, 130, 90, 0.4)';
+  ctx.strokeStyle = "rgba(100, 130, 90, 0.4)";
   ctx.lineWidth = 1;
   ctx.setLineDash([5, 5]);
   ctx.beginPath();
@@ -1081,7 +1175,7 @@ export function drawDropPreview(context: CanvasContext, x: number, tier: number,
     0,
     clampedX,
     container.overflowLine - 50,
-    tierData.radius * 1.2
+    tierData.radius * 1.2,
   );
   gradient.addColorStop(0, tierData.color.highlight);
   gradient.addColorStop(0.3, tierData.color.primary);
@@ -1102,16 +1196,16 @@ function drawCherryBlossoms(ctx: CanvasRenderingContext2D): void {
     ctx.globalAlpha = b.opacity;
 
     // Draw a simple cherry blossom (5 petals)
-    ctx.fillStyle = '#FFB7C5';
+    ctx.fillStyle = "#FFB7C5";
     for (let i = 0; i < 5; i++) {
       ctx.beginPath();
       ctx.ellipse(0, -b.size * 0.6, b.size * 0.35, b.size * 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.rotate(Math.PI * 2 / 5);
+      ctx.rotate((Math.PI * 2) / 5);
     }
 
     // Center
-    ctx.fillStyle = '#FFE4E8';
+    ctx.fillStyle = "#FFE4E8";
     ctx.beginPath();
     ctx.arc(0, 0, b.size * 0.25, 0, Math.PI * 2);
     ctx.fill();
@@ -1146,8 +1240,14 @@ function drawWalkingCat(ctx: CanvasRenderingContext2D): void {
   // Draw the current frame (centered)
   ctx.drawImage(
     catSprite,
-    sourceX, 0, catFrameWidth, catFrameHeight, // Source rectangle
-    -displayWidth / 2, -displayHeight / 2, displayWidth, displayHeight // Destination rectangle
+    sourceX,
+    0,
+    catFrameWidth,
+    catFrameHeight, // Source rectangle
+    -displayWidth / 2,
+    -displayHeight / 2,
+    displayWidth,
+    displayHeight, // Destination rectangle
   );
 
   ctx.restore();
@@ -1162,21 +1262,21 @@ function drawMoon(ctx: CanvasRenderingContext2D, width: number, nightMode: boole
   if (nightMode) {
     // Glowing moon at night
     const glow = ctx.createRadialGradient(moonX, moonY, 8, moonX, moonY, 30);
-    glow.addColorStop(0, 'rgba(255, 250, 220, 0.4)');
-    glow.addColorStop(1, 'rgba(255, 250, 220, 0)');
+    glow.addColorStop(0, "rgba(255, 250, 220, 0.4)");
+    glow.addColorStop(1, "rgba(255, 250, 220, 0)");
     ctx.fillStyle = glow;
     ctx.beginPath();
     ctx.arc(moonX, moonY, 30, 0, Math.PI * 2);
     ctx.fill();
 
     // Moon
-    ctx.fillStyle = '#FFF8E0';
+    ctx.fillStyle = "#FFF8E0";
     ctx.beginPath();
     ctx.arc(moonX, moonY, 16, 0, Math.PI * 2);
     ctx.fill();
 
     // Moon craters
-    ctx.fillStyle = 'rgba(200, 190, 160, 0.3)';
+    ctx.fillStyle = "rgba(200, 190, 160, 0.3)";
     ctx.beginPath();
     ctx.arc(moonX - 5, moonY - 3, 4, 0, Math.PI * 2);
     ctx.fill();
@@ -1185,27 +1285,27 @@ function drawMoon(ctx: CanvasRenderingContext2D, width: number, nightMode: boole
     ctx.fill();
 
     // Zzz
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
     ctx.font = '10px "Segoe UI", sans-serif';
-    ctx.fillText('z', moonX + 18, moonY - 12);
+    ctx.fillText("z", moonX + 18, moonY - 12);
     ctx.font = '12px "Segoe UI", sans-serif';
-    ctx.fillText('z', moonX + 24, moonY - 20);
+    ctx.fillText("z", moonX + 24, moonY - 20);
     ctx.font = '14px "Segoe UI", sans-serif';
-    ctx.fillText('z', moonX + 32, moonY - 30);
+    ctx.fillText("z", moonX + 32, moonY - 30);
   } else {
     // Sun during day
-    ctx.fillStyle = 'rgba(255, 220, 100, 0.3)';
+    ctx.fillStyle = "rgba(255, 220, 100, 0.3)";
     ctx.beginPath();
     ctx.arc(moonX, moonY, 22, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = '#FFE082';
+    ctx.fillStyle = "#FFE082";
     ctx.beginPath();
     ctx.arc(moonX, moonY, 14, 0, Math.PI * 2);
     ctx.fill();
 
     // Sun rays
-    ctx.strokeStyle = 'rgba(255, 200, 50, 0.5)';
+    ctx.strokeStyle = "rgba(255, 200, 50, 0.5)";
     ctx.lineWidth = 2;
     for (let i = 0; i < 8; i++) {
       const angle = (i / 8) * Math.PI * 2;
@@ -1224,7 +1324,7 @@ export function render(
   mochis: Mochi[],
   gameState: GameState,
   leaderboard?: LeaderboardEntry[],
-  playerName?: string
+  playerName?: string,
 ): void {
   context.ctx.setTransform(context.dpr, 0, 0, context.dpr, 0, 0);
 
@@ -1233,7 +1333,12 @@ export function render(
 
   // Draw drop preview
   if (gameState.canDrop && !gameState.gameOver) {
-    drawDropPreview(context, gameState.dropX, gameState.currentMochi?.tier ?? gameState.nextTier, gameState.container);
+    drawDropPreview(
+      context,
+      gameState.dropX,
+      gameState.currentMochi?.tier ?? gameState.nextTier,
+      gameState.container,
+    );
   }
 
   // Draw effects behind mochi

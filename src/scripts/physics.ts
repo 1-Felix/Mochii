@@ -550,6 +550,120 @@ export function updateMochi(
     }
   }
 
+  // FINAL CONSTRAINTS - Applied after all physics to guarantee minimum size
+  // These are absolute limits that cannot be violated
+
+  // Minimum dimensions - prevents pancaking in any direction
+  const minDimension = mochi.baseRadius * (mochi.tier <= 1 ? 1.0 : mochi.tier <= 3 ? 0.8 : 0.6);
+
+  // Check HEIGHT (vertical span)
+  let minY = Infinity, maxY = -Infinity;
+  for (const p of points) {
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const currentHeight = maxY - minY;
+
+  if (currentHeight < minDimension) {
+    const midY = (minY + maxY) / 2;
+    const expansion = minDimension / 2;
+
+    for (const p of points) {
+      const distFromMid = p.y - midY;
+      if (Math.abs(distFromMid) < 0.1) {
+        const idx = points.indexOf(p);
+        const angle = (idx / points.length) * Math.PI * 2;
+        const targetOffsetY = Math.sin(angle) * expansion;
+        p.y = midY + targetOffsetY;
+      } else {
+        const sign = distFromMid > 0 ? 1 : -1;
+        const targetY = midY + sign * expansion;
+        p.y = p.y + (targetY - p.y) * 0.5;
+      }
+      if ((p.y < midY && p.vy > 0) || (p.y > midY && p.vy < 0)) {
+        p.vy *= 0.3;
+      }
+    }
+  }
+
+  // Check WIDTH (horizontal span)
+  let minX = Infinity, maxX = -Infinity;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+  }
+  const currentWidth = maxX - minX;
+
+  if (currentWidth < minDimension) {
+    const midX = (minX + maxX) / 2;
+    const expansion = minDimension / 2;
+
+    for (const p of points) {
+      const distFromMid = p.x - midX;
+      if (Math.abs(distFromMid) < 0.1) {
+        const idx = points.indexOf(p);
+        const angle = (idx / points.length) * Math.PI * 2;
+        const targetOffsetX = Math.cos(angle) * expansion;
+        p.x = midX + targetOffsetX;
+      } else {
+        const sign = distFromMid > 0 ? 1 : -1;
+        const targetX = midX + sign * expansion;
+        p.x = p.x + (targetX - p.x) * 0.5;
+      }
+      if ((p.x < midX && p.vx > 0) || (p.x > midX && p.vx < 0)) {
+        p.vx *= 0.3;
+      }
+    }
+  }
+
+  // Now enforce per-point minimum AND maximum radius from center
+  const finalCenter = calculateCenter(points);
+  // Vanilla & Sakura are very rigid - almost no deformation allowed
+  const minPointRadius = mochi.baseRadius * (mochi.tier <= 1 ? 0.7 : mochi.tier <= 3 ? 0.4 : 0.3);
+  // Maximum radius prevents bell-curve/elongation - Vanilla & Sakura stay nearly circular
+  const maxPointRadius = mochi.baseRadius * (mochi.tier <= 1 ? 1.08 : mochi.tier <= 3 ? 1.3 : 1.4);
+
+  for (const p of points) {
+    const dx = p.x - finalCenter.x;
+    const dy = p.y - finalCenter.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < minPointRadius) {
+      if (dist > 0.1) {
+        // Push point out to minimum radius
+        const nx = dx / dist;
+        const ny = dy / dist;
+        p.x = finalCenter.x + nx * minPointRadius;
+        p.y = finalCenter.y + ny * minPointRadius;
+        // Kill inward velocity completely
+        const radialVel = p.vx * nx + p.vy * ny;
+        if (radialVel < 0) {
+          p.vx -= nx * radialVel;
+          p.vy -= ny * radialVel;
+        }
+      } else {
+        // Point is at center - push it out in its original direction
+        const angle = (points.indexOf(p) / points.length) * Math.PI * 2;
+        p.x = finalCenter.x + Math.cos(angle) * minPointRadius;
+        p.y = finalCenter.y + Math.sin(angle) * minPointRadius;
+        p.vx = 0;
+        p.vy = 0;
+      }
+    } else if (dist > maxPointRadius) {
+      // Pull point back to maximum radius - prevents elongation
+      const nx = dx / dist;
+      const ny = dy / dist;
+      p.x = finalCenter.x + nx * maxPointRadius;
+      p.y = finalCenter.y + ny * maxPointRadius;
+      // Kill outward velocity
+      const radialVel = p.vx * nx + p.vy * ny;
+      if (radialVel > 0) {
+        p.vx -= nx * radialVel * 0.8;
+        p.vy -= ny * radialVel * 0.8;
+      }
+    }
+  }
+
   // Update center
   const newCenter = calculateCenter(points);
   const newVel = calculateVelocity(points);
@@ -557,7 +671,18 @@ export function updateMochi(
   mochi.cy = newCenter.y;
   mochi.vx = newVel.vx;
   mochi.vy = newVel.vy;
-  mochi.radius = mochi.baseRadius * (1 - mochi.squishAmount * 0.15);
+
+  // Cap squishAmount to prevent visual issues (face/color disappearing)
+  // Smaller mochi should squish less visually
+  const maxSquish = mochi.tier <= 1 ? 0.4 : mochi.tier <= 3 ? 0.5 : 0.6;
+  mochi.squishAmount = Math.min(mochi.squishAmount, maxSquish);
+
+  // Ensure radius never goes below 50% of base (prevents face from being too small)
+  const minRadiusRatio = mochi.tier <= 1 ? 0.6 : 0.5;
+  mochi.radius = Math.max(
+    mochi.baseRadius * minRadiusRatio,
+    mochi.baseRadius * (1 - mochi.squishAmount * 0.15)
+  );
 }
 
 export function checkMochiCollision(m1: Mochi, m2: Mochi): boolean {
@@ -567,6 +692,88 @@ export function checkMochiCollision(m1: Mochi, m2: Mochi): boolean {
   const dy = m2.cy - m1.cy;
   const dist = Math.sqrt(dx * dx + dy * dy);
   const minDist = m1.baseRadius + m2.baseRadius;
+
+  // Check if any points from m1 have penetrated inside m2's boundary (and vice versa)
+  // This prevents wobbly edges from overlapping
+  if (dist < minDist * 1.3 && dist > 0.1) {
+    const penetrationThreshold = 2; // Dead zone - ignore tiny penetrations to prevent jitter
+    const nx = dx / dist; // Normal from m1 to m2
+    const ny = dy / dist;
+
+    // Find actual surface extent of each mochi toward the other
+    // This accounts for wobble/deformation extending beyond baseRadius
+    let m2ExtentTowardM1 = 0;
+    for (const p of m2.points) {
+      const pdx = p.x - m2.cx;
+      const pdy = p.y - m2.cy;
+      // Project onto the direction toward m1 (negative normal)
+      const projection = -(pdx * nx + pdy * ny);
+      if (projection > m2ExtentTowardM1) m2ExtentTowardM1 = projection;
+    }
+
+    let m1ExtentTowardM2 = 0;
+    for (const p of m1.points) {
+      const pdx = p.x - m1.cx;
+      const pdy = p.y - m1.cy;
+      // Project onto the direction toward m2 (positive normal)
+      const projection = pdx * nx + pdy * ny;
+      if (projection > m1ExtentTowardM2) m1ExtentTowardM2 = projection;
+    }
+
+    // Check m1's points against m2's actual surface
+    for (const p of m1.points) {
+      const pdx = p.x - m2.cx;
+      const pdy = p.y - m2.cy;
+      const pDist = Math.sqrt(pdx * pdx + pdy * pdy);
+
+      // Use actual extent only - matches visual shape
+      const boundary = m2ExtentTowardM1 * 0.92;
+
+      if (pDist < boundary && pDist > 0.1) {
+        const penetration = boundary - pDist;
+
+        if (penetration > penetrationThreshold) {
+          const pnx = pdx / pDist;
+          const pny = pdy / pDist;
+
+          const targetDist = boundary + 1;
+          const pushAmount = (targetDist - pDist) * 0.2;
+          p.x += pnx * pushAmount;
+          p.y += pny * pushAmount;
+
+          p.vx *= 0.85;
+          p.vy *= 0.85;
+        }
+      }
+    }
+
+    // Check m2's points against m1's actual surface
+    for (const p of m2.points) {
+      const pdx = p.x - m1.cx;
+      const pdy = p.y - m1.cy;
+      const pDist = Math.sqrt(pdx * pdx + pdy * pdy);
+
+      // Use actual extent only - matches visual shape
+      const boundary = m1ExtentTowardM2 * 0.92;
+
+      if (pDist < boundary && pDist > 0.1) {
+        const penetration = boundary - pDist;
+
+        if (penetration > penetrationThreshold) {
+          const pnx = pdx / pDist;
+          const pny = pdy / pDist;
+
+          const targetDist = boundary + 1;
+          const pushAmount = (targetDist - pDist) * 0.2;
+          p.x += pnx * pushAmount;
+          p.y += pny * pushAmount;
+
+          p.vx *= 0.85;
+          p.vy *= 0.85;
+        }
+      }
+    }
+  }
 
   if (dist < minDist && dist > 0.1) {
     // Mark as landed if they collide with each other
@@ -602,52 +809,6 @@ export function checkMochiCollision(m1: Mochi, m2: Mochi): boolean {
     // Set squish amount - only when really compressed
     m1.squishAmount = Math.max(m1.squishAmount, collisionStrength * 0.4);
     m2.squishAmount = Math.max(m2.squishAmount, collisionStrength * 0.4);
-
-    // Point-to-point collision - use actual radius so they touch visually
-    const collisionRadius1 = m1.baseRadius * 0.92;
-    const collisionRadius2 = m2.baseRadius * 0.92;
-
-    for (const p of m1.points) {
-      const pDx = p.x - m2.cx;
-      const pDy = p.y - m2.cy;
-      const pDist = Math.sqrt(pDx * pDx + pDy * pDy);
-
-      if (pDist < collisionRadius2) {
-        // This point is inside or near the other mochi - push it out
-        const pOverlap = collisionRadius2 - pDist;
-        const pNx = pDist > 0.1 ? pDx / pDist : nx;
-        const pNy = pDist > 0.1 ? pDy / pDist : ny;
-
-        // Stronger push to prevent overlap
-        const pushStrength = pOverlap * 0.45;
-        p.x += pNx * pushStrength;
-        p.y += pNy * pushStrength;
-        p.vx += pNx * pushStrength * 0.3;
-        p.vy += pNy * pushStrength * 0.3;
-        p.vx *= 0.92;
-        p.vy *= 0.92;
-      }
-    }
-
-    for (const p of m2.points) {
-      const pDx = p.x - m1.cx;
-      const pDy = p.y - m1.cy;
-      const pDist = Math.sqrt(pDx * pDx + pDy * pDy);
-
-      if (pDist < collisionRadius1) {
-        const pOverlap = collisionRadius1 - pDist;
-        const pNx = pDist > 0.1 ? pDx / pDist : -nx;
-        const pNy = pDist > 0.1 ? pDy / pDist : -ny;
-
-        const pushStrength = pOverlap * 0.45;
-        p.x += pNx * pushStrength;
-        p.y += pNy * pushStrength;
-        p.vx += pNx * pushStrength * 0.3;
-        p.vy += pNy * pushStrength * 0.3;
-        p.vx *= 0.92;
-        p.vy *= 0.92;
-      }
-    }
 
     // Center separation when overlapping
     if (overlap > minDist * 0.15) {
