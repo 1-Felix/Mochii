@@ -236,8 +236,8 @@ export function updateMochi(
   mochi.breathPhase += 0.02 * dt;
   const breathScale = 1 + Math.sin(mochi.breathPhase) * 0.012;
 
-  // Wobble decay
-  mochi.wobbleIntensity *= 0.95;
+  // Wobble decay (frame-rate independent)
+  mochi.wobbleIntensity *= Math.pow(0.95, dt);
 
   // Gravity
   for (const p of points) {
@@ -268,7 +268,7 @@ export function updateMochi(
   }
   mochi.wobblePhase += 0.12 * dt;
 
-  // Spring forces
+  // Spring forces (scaled by dt for frame-rate independence)
   for (let iter = 0; iter < 4; iter++) {
     for (const spring of springs) {
       const p1 = points[spring.p1];
@@ -279,7 +279,7 @@ export function updateMochi(
       if (dist < 0.01) continue;
 
       const diff = (dist - spring.restLength) / dist;
-      const force = diff * spring.stiffness * config.springStiffness;
+      const force = diff * spring.stiffness * config.springStiffness * dt;
 
       p1.vx += dx * force;
       p1.vy += dy * force;
@@ -308,10 +308,11 @@ export function updateMochi(
   // Squish recovery
   mochi.squishAmount = Math.max(0, mochi.squishAmount - config.squishRecovery * dt);
 
-  // Update positions
+  // Update positions (damping is frame-rate independent)
+  const velocityDamping = Math.pow(config.damping, dt);
   for (const p of points) {
-    p.vx *= config.damping;
-    p.vy *= config.damping;
+    p.vx *= velocityDamping;
+    p.vy *= velocityDamping;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
   }
@@ -334,9 +335,10 @@ export function updateMochi(
   }
   angularVel /= points.length;
 
-  // Apply stronger damping when rotating or at rest
+  // Apply stronger damping when rotating or at rest (frame-rate independent)
   const rotationStrength = Math.abs(angularVel);
-  const dampingFactor = mochi.hasLanded ? 0.4 : (rotationStrength > 0.5 ? 0.25 : 0.1);
+  const baseDamping = mochi.hasLanded ? 0.4 : (rotationStrength > 0.5 ? 0.25 : 0.1);
+  const angularDampingFactor = 1 - Math.pow(1 - baseDamping, dt);
 
   if (avgSpeed < 5 || rotationStrength > 0.3) {
     for (const p of points) {
@@ -348,8 +350,8 @@ export function updateMochi(
         const ty = dx / dist;
         const tangentVel = p.vx * tx + p.vy * ty;
         // Remove rotational component
-        p.vx -= tx * tangentVel * dampingFactor;
-        p.vy -= ty * tangentVel * dampingFactor;
+        p.vx -= tx * tangentVel * angularDampingFactor;
+        p.vy -= ty * tangentVel * angularDampingFactor;
       }
     }
   }
@@ -368,11 +370,17 @@ export function updateMochi(
     if (p.y > bottom) {
       const impact = Math.abs(p.vy);
       p.y = bottom;
-      const bounceStrength = config.wallBounce + Math.min(0.2, impact * 0.015);
-      p.vy *= -bounceStrength;
-      p.vx *= config.friction;
-      if (impact > maxFloorImpact) maxFloorImpact = impact;
-      if (impact > 2) hadFloorImpact = true;
+      // Only bounce if moving into the floor with enough velocity
+      if (p.vy > 0.5) {
+        const bounceStrength = config.wallBounce + Math.min(0.2, impact * 0.015);
+        p.vy *= -bounceStrength;
+        p.vx *= config.friction;
+        if (impact > maxFloorImpact) maxFloorImpact = impact;
+        if (impact > 2) hadFloorImpact = true;
+      } else {
+        // Very slow or moving up - just stop vertical movement
+        p.vy = 0;
+      }
 
       // Mark as landed
       if (!mochi.hasLanded && mochi.isDropping) {

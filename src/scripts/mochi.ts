@@ -11,6 +11,7 @@ let lastTime = 0;
 let dropCooldown = 0;
 let playerName: string;
 
+
 // Easter egg tracking
 const KONAMI_CODE = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'KeyB', 'KeyA'];
 let konamiIndex = 0;
@@ -155,6 +156,9 @@ function checkGameOver(): boolean {
   return false;
 }
 
+// Fixed timestep for physics stability
+const PHYSICS_DT = 0.5; // Target ~120fps physics rate
+
 function update(dt: number): void {
   if (gameState.gameOver) return;
 
@@ -168,19 +172,36 @@ function update(dt: number): void {
     }
   }
 
-  // Update all mochis
+  // Sub-stepping: run physics at consistent rate for stability
+  const numSteps = Math.ceil(dt / PHYSICS_DT);
+  const stepDt = dt / numSteps;
+
+  for (let step = 0; step < numSteps; step++) {
+    // Update all mochis
+    for (const mochi of mochis) {
+      if (!mochi.merging) {
+        updateMochi(mochi, defaultConfig, container, stepDt);
+      }
+    }
+
+    // Check collisions between mochis
+    for (let i = 0; i < mochis.length; i++) {
+      for (let j = i + 1; j < mochis.length; j++) {
+        checkMochiCollision(mochis[i], mochis[j]);
+      }
+    }
+  }
+
+  // Post-physics updates (once per frame, not per step)
   for (const mochi of mochis) {
     if (!mochi.merging) {
-      const prevImpact = mochi.impactVelocity;
-      updateMochi(mochi, defaultConfig, container, dt);
-
       // Decrement settle timer (grace period for game over)
       if (mochi.settleTimer > 0) {
         mochi.settleTimer -= dt;
       }
 
       // Spawn impact stars on floor hit
-      if (mochi.impactVelocity > prevImpact && mochi.impactVelocity > 5) {
+      if (mochi.impactVelocity > 5) {
         const impactY = container.y + container.height - container.wallThickness;
         addImpactStars(mochi.cx, impactY, mochi.impactVelocity, mochi.color.primary);
       }
@@ -197,19 +218,13 @@ function update(dt: number): void {
     }
   }
 
-  // Check collisions and merges
+  // Check for merges (once per frame)
   const mergePairs: [Mochi, Mochi][] = [];
-
   for (let i = 0; i < mochis.length; i++) {
     for (let j = i + 1; j < mochis.length; j++) {
       const m1 = mochis[i];
       const m2 = mochis[j];
-
-      // checkMochiCollision handles physics and returns true if same tier (can merge)
-      const couldMerge = checkMochiCollision(m1, m2);
-
-      // Check for merge using the dedicated function (checks distance threshold)
-      if (couldMerge && canMerge(m1, m2)) {
+      if (canMerge(m1, m2)) {
         mergePairs.push([m1, m2]);
       }
     }
