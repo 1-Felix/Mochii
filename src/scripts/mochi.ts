@@ -24,9 +24,16 @@ const CONTAINER_WIDTH = 320;
 const CONTAINER_HEIGHT = 450;
 
 function createContainer(width: number, height: number): Container {
-  // Container is fixed size, just centered on screen
+  // Container is fixed size, just centered horizontally
   const x = (width - CONTAINER_WIDTH) / 2;
-  const y = (height - CONTAINER_HEIGHT) / 2 + 20; // Slightly lower for UI space
+
+  // On mobile/smaller screens, shift container towards bottom
+  // Leave more space at top for UI, less at bottom for thumb access
+  const isMobile = width < 500 || height < 700;
+  const bottomMargin = isMobile ? 20 : 40;
+  const y = isMobile
+    ? height - CONTAINER_HEIGHT - bottomMargin
+    : (height - CONTAINER_HEIGHT) / 2 + 20;
 
   return {
     x,
