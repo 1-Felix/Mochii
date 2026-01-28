@@ -1353,6 +1353,7 @@ function drawProgressionWheel(
   currentTier: number,
   mouseX: number,
   mouseY: number,
+  nightMode: boolean = false,
 ): void {
   const { ctx } = context;
 
@@ -1362,18 +1363,28 @@ function drawProgressionWheel(
   const spacing = 42; // Vertical spacing between tiers
   const hoverRadius = 20; // Hover detection radius
 
-  // Background panel - matcha themed
+  // Background panel
   const panelGradient = ctx.createLinearGradient(
     wheelX - 28,
     wheelStartY,
     wheelX + 28,
     wheelStartY,
   );
-  panelGradient.addColorStop(0, "rgba(200, 220, 190, 0.6)");
-  panelGradient.addColorStop(0.5, "rgba(220, 235, 210, 0.7)");
-  panelGradient.addColorStop(1, "rgba(200, 220, 190, 0.6)");
-  ctx.fillStyle = panelGradient;
-  ctx.strokeStyle = "rgba(100, 130, 90, 0.5)";
+  if (nightMode) {
+    // Warm wood panel matching container
+    panelGradient.addColorStop(0, "rgba(75, 62, 48, 0.7)");
+    panelGradient.addColorStop(0.5, "rgba(85, 72, 56, 0.8)");
+    panelGradient.addColorStop(1, "rgba(75, 62, 48, 0.7)");
+    ctx.fillStyle = panelGradient;
+    ctx.strokeStyle = "rgba(74, 61, 46, 0.6)";
+  } else {
+    // Matcha themed
+    panelGradient.addColorStop(0, "rgba(200, 220, 190, 0.6)");
+    panelGradient.addColorStop(0.5, "rgba(220, 235, 210, 0.7)");
+    panelGradient.addColorStop(1, "rgba(200, 220, 190, 0.6)");
+    ctx.fillStyle = panelGradient;
+    ctx.strokeStyle = "rgba(100, 130, 90, 0.5)";
+  }
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.roundRect(wheelX - 28, wheelStartY - 20, 56, spacing * 10 + 50, 12);
@@ -1430,7 +1441,9 @@ function drawProgressionWheel(
     const showHighlight = isCurrentTier || anim.scale > 1.02;
     if (showHighlight) {
       const highlightAlpha = isHovered ? 0.6 : Math.min(0.5, (anim.scale - 1) * 4 + 0.2);
-      ctx.fillStyle = `rgba(170, 210, 150, ${highlightAlpha})`;
+      ctx.fillStyle = nightMode
+        ? `rgba(200, 170, 120, ${highlightAlpha})`
+        : `rgba(170, 210, 150, ${highlightAlpha})`;
       ctx.beginPath();
       ctx.arc(wheelX, y, 19 + (anim.scale - 1) * 15, 0, Math.PI * 2);
       ctx.fill();
@@ -1464,10 +1477,10 @@ function drawProgressionWheel(
     ctx.stroke();
     ctx.globalAlpha = 1;
 
-    // Draw arrow to next tier (except for last) - matcha colored
+    // Draw arrow to next tier (except for last)
     if (i < mochiTiers.length - 1) {
       const arrowY = y + spacing / 2;
-      ctx.fillStyle = "rgba(100, 130, 90, 0.5)";
+      ctx.fillStyle = nightMode ? "rgba(160, 140, 110, 0.5)" : "rgba(100, 130, 90, 0.5)";
       ctx.beginPath();
       ctx.moveTo(wheelX, arrowY - 4);
       ctx.lineTo(wheelX + 5, arrowY + 4);
@@ -1514,7 +1527,7 @@ function drawProgressionWheel(
     ctx.globalAlpha = tooltipAnim.opacity;
 
     // Tooltip background - softer, rounder
-    ctx.fillStyle = "rgba(55, 75, 45, 0.92)";
+    ctx.fillStyle = nightMode ? "rgba(50, 40, 30, 0.92)" : "rgba(55, 75, 45, 0.92)";
     ctx.beginPath();
     ctx.roundRect(tooltipLeft, tooltipY - 11, tooltipWidth, 22, 8);
     ctx.fill();
@@ -1528,7 +1541,7 @@ function drawProgressionWheel(
     ctx.fill();
 
     // Tooltip text - centered
-    ctx.fillStyle = "#F4FCF0";
+    ctx.fillStyle = nightMode ? "#F0E8DC" : "#F4FCF0";
     ctx.textAlign = "center";
     ctx.fillText(tier.name, tooltipLeft + tooltipWidth / 2, tooltipY + 4);
     ctx.textAlign = "left";
@@ -1794,7 +1807,14 @@ export function drawUI(
 
   // Draw progression wheel on the right (only on larger screens)
   if (!isSmallScreen) {
-    drawProgressionWheel(context, container, nextTier, mouseX, mouseY);
+    drawProgressionWheel(
+      context,
+      container,
+      gameState.currentTier,
+      mouseX,
+      mouseY,
+      gameState.nightMode,
+    );
   }
 
   // Draw leaderboard on the left (with vertical fade near container)
@@ -1849,7 +1869,12 @@ export function drawUI(
     ctx.translate(-panelX, -panelY);
 
     // Panel background with soft gradient
-    const panelGrad = ctx.createLinearGradient(panelX, panelY - 110, panelX, panelY - 110 + panelHeight);
+    const panelGrad = ctx.createLinearGradient(
+      panelX,
+      panelY - 110,
+      panelX,
+      panelY - 110 + panelHeight,
+    );
     panelGrad.addColorStop(0, "rgba(242, 248, 238, 0.97)");
     panelGrad.addColorStop(0.5, "rgba(234, 243, 230, 0.97)");
     panelGrad.addColorStop(1, "rgba(226, 238, 222, 0.97)");
@@ -2005,7 +2030,7 @@ export function drawUI(
 
     // Player rank (daily mode only)
     if (gameMode === "daily" && leaderboard && leaderboard.length > 0 && playerName) {
-      const playerIndex = leaderboard.findIndex(e => e.name === playerName);
+      const playerIndex = leaderboard.findIndex((e) => e.name === playerName);
       if (playerIndex >= 0) {
         ctx.font = '14px "Segoe UI", sans-serif';
         ctx.fillStyle = "#7A9B6D";
@@ -2250,8 +2275,8 @@ export function drawUI(
 
     const lineHeight = 20;
     const paddingLeft = 12;
-    const paddingRight = 18;
-    const paddingY = 10;
+    const paddingRight = 26;
+    const paddingY = 5;
     const maxLineWidth = Math.max(...lines.map((l) => ctx.measureText(l).width));
     const tooltipWidth = maxLineWidth + paddingLeft + paddingRight;
     const tooltipHeight = lines.length * lineHeight + paddingY * 2;
@@ -2283,7 +2308,7 @@ export function drawUI(
     // Tooltip text
     ctx.textAlign = "left";
     const textX = tooltipX - tooltipWidth / 2 + paddingLeft;
-    const textStartY = tooltipY + paddingY + 12; // 12 = approximate font ascent
+    const textStartY = tooltipY + paddingY + 14; // 14 = approximate font ascent
     lines.forEach((line, i) => {
       const isCurrentMode = line.startsWith("▸");
       ctx.fillStyle = isCurrentMode ? "#90EE90" : "rgba(255, 255, 255, 0.7)";
