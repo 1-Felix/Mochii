@@ -584,9 +584,10 @@ function getHoveredButton(x: number, y: number): 'daily' | 'freeplay' | 'share' 
   const centerY = context.height / 2;
 
   // Button positions (must match renderer)
-  const dailyBtnY = centerY + 50;
-  const practiceBtnY = centerY + 105;
-  const shareBtnY = centerY + 160;
+  const dailyBtnY = centerY + 70;
+  const hasShareButton = gameState.gameMode === 'daily' && !!gameState.dailyChallenge;
+  const shareBtnY = centerY + 125;
+  const practiceBtnY = hasShareButton ? centerY + 180 : centerY + 125;
   const btnWidth = 180;
   const btnHeight = 44;
 
@@ -600,18 +601,18 @@ function getHoveredButton(x: number, y: number): 'daily' | 'freeplay' | 'share' 
     return 'daily';
   }
 
-  // Check Free Play button
-  if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
-      y >= practiceBtnY - btnHeight/2 && y <= practiceBtnY + btnHeight/2) {
-    return 'freeplay';
-  }
-
   // Check Share button (only in daily mode)
-  if (gameState.gameMode === 'daily' && gameState.dailyChallenge) {
+  if (hasShareButton) {
     if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
         y >= shareBtnY - btnHeight/2 && y <= shareBtnY + btnHeight/2) {
       return 'share';
     }
+  }
+
+  // Check Free Play button
+  if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
+      y >= practiceBtnY - btnHeight/2 && y <= practiceBtnY + btnHeight/2) {
+    return 'freeplay';
   }
 
   return null;
@@ -691,7 +692,7 @@ function isInfoIconClick(clickX: number, clickY: number): boolean {
   const { toggleX, toggleY } = getTogglePosition();
   const infoX = toggleX + 48;
   const infoY = toggleY;
-  const infoRadius = 15; // Slightly larger tap target
+  const infoRadius = 20; // Generous click target
   const dx = clickX - infoX;
   const dy = clickY - infoY;
   return Math.sqrt(dx * dx + dy * dy) < infoRadius;
@@ -762,8 +763,9 @@ function handleClick(e: MouseEvent): void {
 
     // Button positions (must match renderer)
     const dailyBtnY = centerY + 70;
-    const practiceBtnY = centerY + 125;
-    const shareBtnY = centerY + 180;
+    const hasShareButton = gameState.gameMode === 'daily' && !!gameState.dailyChallenge;
+    const shareBtnY = centerY + 125;
+    const practiceBtnY = hasShareButton ? centerY + 180 : centerY + 125;
     const btnWidth = 180;
     const btnHeight = 44;
 
@@ -778,13 +780,6 @@ function handleClick(e: MouseEvent): void {
       return;
     }
 
-    // Check Practice button
-    if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
-        y >= practiceBtnY - btnHeight/2 && y <= practiceBtnY + btnHeight/2) {
-      initGameState('practice');
-      return;
-    }
-
     // Check Share button (only shown for daily mode)
     if (gameState.gameMode === 'daily' && gameState.dailyChallenge) {
       if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
@@ -794,6 +789,13 @@ function handleClick(e: MouseEvent): void {
         gameState.shareCopiedTimer = 90; // ~1.5 seconds at 60fps
         return;
       }
+    }
+
+    // Check Free Play button
+    if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
+        y >= practiceBtnY - btnHeight/2 && y <= practiceBtnY + btnHeight/2) {
+      initGameState('practice');
+      return;
     }
 
     // Click outside modal when daily is completed -> switch to Free Play
@@ -844,10 +846,17 @@ function handleTouchEnd(e: TouchEvent): void {
     return;
   }
 
-  // Check for info icon tap (shows tooltip)
-  if (isInfoIconClick(x, y)) {
-    gameState.infoTooltipTimer = 180; // Show for ~3 seconds
-    return;
+  // Check for info icon tap (shows tooltip) - larger tap target for mobile
+  {
+    const { toggleX, toggleY } = getTogglePosition();
+    const infoIconX = toggleX + 48;
+    const infoIconY = toggleY;
+    const dxInfo = x - infoIconX;
+    const dyInfo = y - infoIconY;
+    if (Math.sqrt(dxInfo * dxInfo + dyInfo * dyInfo) < 30) {
+      gameState.infoTooltipTimer = 180;
+      return;
+    }
   }
 
   // Check for speaker icon tap (bottom right corner)
@@ -889,8 +898,9 @@ function handleTouchEnd(e: TouchEvent): void {
 
     // Button positions (must match renderer)
     const dailyBtnY = centerY + 70;
-    const practiceBtnY = centerY + 125;
-    const shareBtnY = centerY + 180;
+    const hasShareButton = gameState.gameMode === 'daily' && !!gameState.dailyChallenge;
+    const shareBtnY = centerY + 125;
+    const practiceBtnY = hasShareButton ? centerY + 180 : centerY + 125;
     const btnWidth = 180;
     const btnHeight = 44;
 
@@ -905,13 +915,6 @@ function handleTouchEnd(e: TouchEvent): void {
       return;
     }
 
-    // Check Practice button
-    if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
-        y >= practiceBtnY - btnHeight/2 && y <= practiceBtnY + btnHeight/2) {
-      initGameState('practice');
-      return;
-    }
-
     // Check Share button (only shown for daily mode)
     if (gameState.gameMode === 'daily' && gameState.dailyChallenge) {
       if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
@@ -921,6 +924,13 @@ function handleTouchEnd(e: TouchEvent): void {
         gameState.shareCopiedTimer = 90; // ~1.5 seconds at 60fps
         return;
       }
+    }
+
+    // Check Free Play button
+    if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
+        y >= practiceBtnY - btnHeight/2 && y <= practiceBtnY + btnHeight/2) {
+      initGameState('practice');
+      return;
     }
 
     // Tap outside modal when daily is completed -> switch to Free Play

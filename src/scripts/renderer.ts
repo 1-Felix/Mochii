@@ -1546,7 +1546,7 @@ function drawLeaderboard(
   const { ctx } = context;
 
   const panelX = 20;
-  const panelY = 100; // Below score/name/best area
+  const panelY = 110; // Below score/name/best area
   const panelWidth = 180;
   const maxEntries = 5;
 
@@ -1736,13 +1736,13 @@ export function drawUI(
   if (playerName) {
     ctx.fillStyle = "rgba(90, 120, 80, 0.5)";
     ctx.font = '12px "Segoe UI", sans-serif';
-    ctx.fillText(playerName, 20, 52);
+    ctx.fillText(playerName, 20, 58);
   }
 
   // Best score
   ctx.font = '16px "Segoe UI", sans-serif';
   ctx.fillStyle = "#6B8A5E";
-  ctx.fillText(`Best: ${highScore}`, 20, 72);
+  ctx.fillText(`Best: ${highScore}`, 20, 82);
 
   // Next mochi preview - position changes based on screen size
   let previewX: number;
@@ -1848,13 +1848,34 @@ export function drawUI(
     ctx.scale(scaleProgress, scaleProgress);
     ctx.translate(-panelX, -panelY);
 
-    // Panel background
-    ctx.fillStyle = "rgba(230, 240, 225, 0.95)";
-    ctx.strokeStyle = "#7A9B6D";
-    ctx.lineWidth = 3;
+    // Panel background with soft gradient
+    const panelGrad = ctx.createLinearGradient(panelX, panelY - 110, panelX, panelY - 110 + panelHeight);
+    panelGrad.addColorStop(0, "rgba(242, 248, 238, 0.97)");
+    panelGrad.addColorStop(0.5, "rgba(234, 243, 230, 0.97)");
+    panelGrad.addColorStop(1, "rgba(226, 238, 222, 0.97)");
+    ctx.fillStyle = panelGrad;
+    ctx.shadowColor = "rgba(80, 120, 70, 0.2)";
+    ctx.shadowBlur = 20;
+    ctx.shadowOffsetY = 4;
     ctx.beginPath();
-    ctx.roundRect(panelX - 170, panelY - 110, 340, panelHeight, 16);
+    ctx.roundRect(panelX - 170, panelY - 110, 340, panelHeight, 20);
     ctx.fill();
+
+    // Reset shadow
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+
+    // Soft border
+    ctx.strokeStyle = "rgba(122, 155, 109, 0.4)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Inner highlight
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(panelX - 168, panelY - 108, 336, panelHeight - 4, 19);
     ctx.stroke();
 
     // Mini mochi mascot showing highest tier achieved (top right of panel)
@@ -1982,6 +2003,16 @@ export function drawUI(
     ctx.fillStyle = "#4A6741";
     ctx.fillText(`Score: ${Math.floor(displayedScore).toLocaleString()}`, panelX, panelY - 12);
 
+    // Player rank (daily mode only)
+    if (gameMode === "daily" && leaderboard && leaderboard.length > 0 && playerName) {
+      const playerIndex = leaderboard.findIndex(e => e.name === playerName);
+      if (playerIndex >= 0) {
+        ctx.font = '14px "Segoe UI", sans-serif';
+        ctx.fillStyle = "#7A9B6D";
+        ctx.fillText(`Rank #${playerIndex + 1} of ${leaderboard.length}`, panelX, panelY + 6);
+      }
+    }
+
     // Tier progression bar
     const tierBarY = panelY + 18;
     const tierBarWidth = 280;
@@ -2058,6 +2089,14 @@ export function drawUI(
     ctx.font = '12px "Segoe UI", sans-serif';
     ctx.fillStyle = "#6B8A5E";
     ctx.fillText(`Highest: ${tierNames[highestTier] || "Vanilla"}`, panelX, tierBarY + 22);
+
+    // Subtle divider between content and buttons
+    ctx.strokeStyle = "rgba(122, 155, 109, 0.15)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(panelX - 120, panelY + 50);
+    ctx.lineTo(panelX + 120, panelY + 50);
+    ctx.stroke();
 
     ctx.restore(); // Restore from scale transform
 
@@ -2152,43 +2191,41 @@ export function drawUI(
       ctx.restore();
     };
 
-    // Buttons with more spacing (adjusted for tier bar)
+    // Buttons - Share before Free Play in daily mode
     const dailyBtnY = panelY + 70;
-    const practiceBtnY = panelY + 125;
-    const shareBtnY = panelY + 180;
+    const hasShareButton = gameMode === "daily" && !!dailyChallenge;
+    const shareBtnY = panelY + 125;
+    const practiceBtnY = hasShareButton ? panelY + 180 : panelY + 125;
 
     if (dailyAlreadyPlayed) {
-      // Daily already completed - show friendly message instead of confusing button
+      // Daily already completed - show friendly message
       ctx.fillStyle = "#7A9B6D";
       ctx.font = '14px "Segoe UI", sans-serif';
-      ctx.fillText("✓ Today's daily complete!", panelX, dailyBtnY - 5);
+      ctx.fillText("Today's daily complete!", panelX, dailyBtnY - 5);
       ctx.fillStyle = "#8BA37E";
       ctx.font = '12px "Segoe UI", sans-serif';
       ctx.fillText("Come back tomorrow for a new challenge", panelX, dailyBtnY + 12);
-
-      // Free Play button - moved up slightly and is primary
-      drawButton("Free Play", practiceBtnY, "primary", "freeplay");
     } else {
       // Daily button - primary if in daily mode, secondary otherwise
       const dailyText =
-        gameMode === "daily" && dailyChallenge?.played ? "Daily ✓" : "Daily Challenge";
+        gameMode === "daily" && dailyChallenge?.played ? "Daily" : "Daily Challenge";
       drawButton(dailyText, dailyBtnY, gameMode === "daily" ? "primary" : "secondary", "daily");
-
-      // Free Play button - primary if in practice mode
-      drawButton(
-        "Free Play",
-        practiceBtnY,
-        gameMode === "practice" ? "primary" : "secondary",
-        "freeplay",
-      );
     }
 
-    // Share button only for daily mode
-    if (gameMode === "daily" && dailyChallenge) {
-      const shareText = gameState.shareCopiedTimer > 0 ? "✓ Copied!" : "📋 Share";
+    // Share button (only for daily mode, positioned between daily and free play)
+    if (hasShareButton) {
+      const shareText = gameState.shareCopiedTimer > 0 ? "Copied!" : "Share";
       const shareStyle = gameState.shareCopiedTimer > 0 ? "primary" : "tertiary";
       drawButton(shareText, shareBtnY, shareStyle, "share");
     }
+
+    // Free Play button
+    drawButton(
+      "Free Play",
+      practiceBtnY,
+      dailyAlreadyPlayed || gameMode === "practice" ? "primary" : "secondary",
+      "freeplay",
+    );
   }
 
   // Draw info tooltip LAST (highest z-index, overlaps everything)
