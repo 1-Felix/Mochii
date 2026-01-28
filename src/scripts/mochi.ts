@@ -15,6 +15,17 @@ let playerName: string;
 // Seeded random function for daily mode
 let seededRandom: (() => number) | null = null;
 
+// Saved game state per mode for toggle persistence
+interface SavedModeState {
+  mochis: Mochi[];
+  gameState: GameState;
+  dropCooldown: number;
+  seededRandom: (() => number) | null;
+}
+
+let savedDailyState: SavedModeState | null = null;
+let savedFreePlayState: SavedModeState | null = null;
+
 // Get a random droppable tier (uses seeded random in daily mode)
 function getNextTier(): number {
   const rand = gameState?.gameMode === 'daily' && seededRandom ? seededRandom() : Math.random();
@@ -118,6 +129,13 @@ function createContainer(width: number, height: number): Container {
 }
 
 function initGameState(mode: GameMode = 'daily'): void {
+  // Clear saved state for this mode since we're starting fresh
+  if (mode === 'daily') {
+    savedDailyState = null;
+  } else {
+    savedFreePlayState = null;
+  }
+
   const container = createContainer(context.width, context.height);
 
   // Set up seeded random for daily mode
@@ -698,10 +716,52 @@ function isInfoIconClick(clickX: number, clickY: number): boolean {
   return Math.sqrt(dx * dx + dy * dy) < infoRadius;
 }
 
-// Handle mode toggle - switch between daily and free play
+// Handle mode toggle - switch between daily and free play (preserves state)
 function handleModeToggle(): void {
-  const newMode: GameMode = gameState.gameMode === 'daily' ? 'practice' : 'daily';
-  initGameState(newMode);
+  const currentMode = gameState.gameMode;
+  const newMode: GameMode = currentMode === 'daily' ? 'practice' : 'daily';
+
+  // Preserve global preferences across modes
+  const nightMode = gameState.nightMode;
+  const soundEnabled = gameState.soundEnabled;
+
+  // Save current mode state
+  if (currentMode === 'daily') {
+    savedDailyState = { mochis, gameState, dropCooldown, seededRandom };
+  } else {
+    savedFreePlayState = { mochis, gameState, dropCooldown, seededRandom };
+  }
+
+  // Check for saved state in target mode
+  const targetState = newMode === 'daily' ? savedDailyState : savedFreePlayState;
+
+  if (targetState) {
+    // Restore saved state
+    mochis = targetState.mochis;
+    gameState = targetState.gameState;
+    dropCooldown = targetState.dropCooldown;
+    seededRandom = targetState.seededRandom;
+
+    // Sync landing states to prevent false dust poofs on restore
+    previousLandingStates.clear();
+    for (const m of mochis) {
+      previousLandingStates.set(m.id, m.hasLanded);
+    }
+
+    // Update container in case of resize
+    gameState.container = createContainer(context.width, context.height);
+
+    // Carry over global preferences
+    gameState.nightMode = nightMode;
+    gameState.soundEnabled = soundEnabled;
+
+    // Update leaderboard for this mode
+    const todayDate = getTodayString();
+    setLeaderboardMode(newMode, todayDate);
+  } else {
+    // No saved state - initialize fresh
+    initGameState(newMode);
+  }
 }
 
 function handleClick(e: MouseEvent): void {
