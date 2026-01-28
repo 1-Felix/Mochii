@@ -22,7 +22,14 @@
       "Bash(npx tsc --noEmit)",
       "mcp__supabase__execute_sql",
       "Bash(pnpm run build:*)",
-      "Bash(pnpm build:*)"
+      "Bash(pnpm build:*)",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__get_advisors",
+      "mcp__ide__getDiagnostics"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }

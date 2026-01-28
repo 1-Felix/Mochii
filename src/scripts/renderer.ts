@@ -11,7 +11,7 @@ import type {
 } from "./types";
 import { mochiTiers } from "./physics";
 import type { LeaderboardEntry } from "./leaderboard";
-import { getDayNumber, getTodayString } from "./daily";
+import { getDayNumber } from "./daily";
 
 // Visual effects storage
 const mergeEffects: MergeEffect[] = [];
@@ -110,7 +110,7 @@ export function addDustPoof(x: number, y: number, intensity: number = 1): void {
   dustPoofs.push({ x, y, particles, life: 1 });
 }
 
-export function addCherryBlossoms(width: number, height: number, count: number): void {
+export function addCherryBlossoms(width: number, _height: number, count: number): void {
   for (let i = 0; i < count; i++) {
     cherryBlossoms.push({
       x: Math.random() * width,
@@ -510,7 +510,13 @@ export function clearCanvas(context: CanvasContext, nightMode: boolean = false):
 }
 
 // Draw big muted day number watermark for daily mode
-function drawDailyWatermark(ctx: CanvasRenderingContext2D, width: number, containerY: number, dayNumber: number, nightMode: boolean): void {
+function drawDailyWatermark(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  containerY: number,
+  dayNumber: number,
+  nightMode: boolean,
+): void {
   const text = `#${dayNumber}`;
 
   // Large, soft watermark positioned above container, slightly overlapping top edge
@@ -533,7 +539,11 @@ function drawDailyWatermark(ctx: CanvasRenderingContext2D, width: number, contai
   ctx.restore();
 }
 
-export function drawContainer(context: CanvasContext, container: Container, nightMode: boolean = false): void {
+export function drawContainer(
+  context: CanvasContext,
+  container: Container,
+  nightMode: boolean = false,
+): void {
   const { ctx } = context;
   const { x, y, width, height, wallThickness, overflowLine } = container;
 
@@ -583,7 +593,12 @@ export function drawContainer(context: CanvasContext, container: Container, nigh
     ctx.stroke();
 
     // Bottom wall
-    const bottomWallGradient = ctx.createLinearGradient(x, y + height - wallThickness, x, y + height);
+    const bottomWallGradient = ctx.createLinearGradient(
+      x,
+      y + height - wallThickness,
+      x,
+      y + height,
+    );
     bottomWallGradient.addColorStop(0, "#6B5A47");
     bottomWallGradient.addColorStop(1, "#4A3D2E");
     ctx.fillStyle = bottomWallGradient;
@@ -647,7 +662,12 @@ export function drawContainer(context: CanvasContext, container: Container, nigh
     ctx.stroke();
 
     // Bottom wall
-    const bottomWallGradient = ctx.createLinearGradient(x, y + height - wallThickness, x, y + height);
+    const bottomWallGradient = ctx.createLinearGradient(
+      x,
+      y + height - wallThickness,
+      x,
+      y + height,
+    );
     bottomWallGradient.addColorStop(0, "#8DAA7F");
     bottomWallGradient.addColorStop(1, "#6B8A5E");
     ctx.fillStyle = bottomWallGradient;
@@ -761,10 +781,22 @@ function drawFace(
       // Eyes half closed
       const closeAmount = blinkState / 0.3;
       ctx.beginPath();
-      ctx.arc(leftX + lookOffset, y, openSize, Math.PI * (0.1 + 0.05 * closeAmount), Math.PI * (0.9 - 0.05 * closeAmount));
+      ctx.arc(
+        leftX + lookOffset,
+        y,
+        openSize,
+        Math.PI * (0.1 + 0.05 * closeAmount),
+        Math.PI * (0.9 - 0.05 * closeAmount),
+      );
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(rightX + lookOffset, y, openSize, Math.PI * (0.1 + 0.05 * closeAmount), Math.PI * (0.9 - 0.05 * closeAmount));
+      ctx.arc(
+        rightX + lookOffset,
+        y,
+        openSize,
+        Math.PI * (0.1 + 0.05 * closeAmount),
+        Math.PI * (0.9 - 0.05 * closeAmount),
+      );
       ctx.stroke();
     } else {
       // Eyes open - normal happy eyes
@@ -961,24 +993,12 @@ function drawFace(
 
       // Left eye - gentle curved closed eye, slightly scrunched
       ctx.beginPath();
-      ctx.arc(
-        cx - eyeSpacing,
-        faceY + eyeSize * 0.2,
-        eyeSize * 0.9,
-        Math.PI * 0.2,
-        Math.PI * 0.8,
-      );
+      ctx.arc(cx - eyeSpacing, faceY + eyeSize * 0.2, eyeSize * 0.9, Math.PI * 0.2, Math.PI * 0.8);
       ctx.stroke();
 
       // Right eye - gentle curved closed eye, slightly scrunched
       ctx.beginPath();
-      ctx.arc(
-        cx + eyeSpacing,
-        faceY + eyeSize * 0.2,
-        eyeSize * 0.9,
-        Math.PI * 0.2,
-        Math.PI * 0.8,
-      );
+      ctx.arc(cx + eyeSpacing, faceY + eyeSize * 0.2, eyeSize * 0.9, Math.PI * 0.2, Math.PI * 0.8);
       ctx.stroke();
 
       // Wide open yawning mouth (oval)
@@ -1042,7 +1062,8 @@ function drawFace(
   // Blush - extra big and rosy when squished or stressed!
   const isSquished = emotion === "squished";
   const isStressed = emotion === "stressed";
-  const blushOpacity = emotion === "surprised" || isSquished || emotion === "love" || isStressed ? 0.7 : 0.35;
+  const blushOpacity =
+    emotion === "surprised" || isSquished || emotion === "love" || isStressed ? 0.7 : 0.35;
   const blushWidth = isSquished ? 7 * scale : 5 * scale;
   const blushHeight = isSquished ? 4 * scale : 3 * scale;
 
@@ -1212,7 +1233,19 @@ function drawEffects(ctx: CanvasRenderingContext2D): void {
 
 export function drawMochi(context: CanvasContext, mochi: Mochi, isPreview: boolean = false): void {
   const { ctx } = context;
-  const { points, color, cx, cy, radius, baseRadius, emotion, squishAmount, merging, blinkState, lookDirection } = mochi;
+  const {
+    points,
+    color,
+    cx,
+    cy,
+    radius,
+    baseRadius,
+    emotion,
+    squishAmount,
+    merging,
+    blinkState,
+    lookDirection,
+  } = mochi;
 
   // Merging animation
   if (merging) {
@@ -1555,11 +1588,16 @@ function drawLeaderboard(
     }
   } else {
     // Find player's rank in full leaderboard
-    const playerRank = leaderboard.findIndex(e => e.name === playerName);
+    const playerRank = leaderboard.findIndex((e) => e.name === playerName);
     const playerInTop = playerRank >= 0 && playerRank < maxEntries - 1; // Top 4
 
     // Build display list: top entries + player if not in top
-    const displayEntries: { entry: LeaderboardEntry; rank: number; isPlayer: boolean; showGap: boolean }[] = [];
+    const displayEntries: {
+      entry: LeaderboardEntry;
+      rank: number;
+      isPlayer: boolean;
+      showGap: boolean;
+    }[] = [];
 
     // How many top entries to show
     const topCount = playerInTop ? maxEntries : maxEntries - 1;
@@ -1661,11 +1699,38 @@ export function drawUI(
   ctx.fillText(scoreText, 20, 35);
 
   // Mode toggle switch (next to score on first line)
-  const { gameMode, dailyChallenge } = gameState;
+  const { gameMode } = gameState;
   const scoreWidth = ctx.measureText(scoreText).width;
   const toggleX = 20 + scoreWidth + 50; // After score with some spacing
   const toggleY = 28;
-  drawModeToggle(ctx, toggleX, toggleY, gameMode === 'daily', gameState.nightMode);
+  drawModeToggle(ctx, toggleX, toggleY, gameMode === "daily", gameState.nightMode);
+
+  // Info icon next to toggle (explains daily mode)
+  const infoX = toggleX + 48;
+  const infoY = toggleY;
+  const infoRadius = 10;
+  const infoDx = mouseX - infoX;
+  const infoDy = mouseY - infoY;
+  const isHoveringInfo = Math.sqrt(infoDx * infoDx + infoDy * infoDy) < infoRadius + 5;
+  const showInfoTooltip = isHoveringInfo || gameState.infoTooltipTimer > 0;
+
+  // Draw info icon
+  ctx.save();
+  ctx.globalAlpha = showInfoTooltip ? 1 : 0.5;
+  ctx.fillStyle = gameState.nightMode ? "rgba(150, 180, 200, 0.8)" : "rgba(100, 140, 90, 0.8)";
+  ctx.beginPath();
+  ctx.arc(infoX, infoY, infoRadius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = gameState.nightMode ? "#E8F0F8" : "#FFFFFF";
+  ctx.font = 'bold 13px "Segoe UI", sans-serif';
+  ctx.textAlign = "center";
+  ctx.fillText("?", infoX, infoY + 5);
+  ctx.restore();
+
+  // Store tooltip info for drawing later (higher z-index)
+  const infoTooltipData = showInfoTooltip
+    ? { x: infoX, y: infoY + 28, gameMode, nightMode: gameState.nightMode }
+    : null;
 
   // Player name - underneath the score
   if (playerName) {
@@ -1678,7 +1743,6 @@ export function drawUI(
   ctx.font = '16px "Segoe UI", sans-serif';
   ctx.fillStyle = "#6B8A5E";
   ctx.fillText(`Best: ${highScore}`, 20, 72);
-
 
   // Next mochi preview - position changes based on screen size
   let previewX: number;
@@ -1742,72 +1806,455 @@ export function drawUI(
   if (gameOver) {
     const { gameMode, dailyChallenge } = gameState;
 
-    // Semi-transparent matcha overlay
-    ctx.fillStyle = "rgba(60, 80, 50, 0.75)";
+    // Animation and display state
+    const { hoveredButton, buttonHoverProgress, modalAnimationProgress, displayedScore } =
+      gameState;
+
+    // Easing functions
+    const easeOutBack = (t: number) => {
+      const c1 = 1.70158;
+      const c3 = c1 + 1;
+      return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+    };
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+    // Semi-transparent matcha overlay (fades in)
+    const overlayAlpha = Math.min(0.75, modalAnimationProgress * 0.75);
+    ctx.fillStyle = `rgba(60, 80, 50, ${overlayAlpha})`;
     ctx.fillRect(0, 0, width, context.height);
 
-    // Decorative panel - taller to fit buttons
+    // Check if daily already played (for layout calculation)
+    const dailyAlreadyPlayed = dailyChallenge?.played === true;
+
+    // Get highest tier reached
+    const highestTier =
+      gameMode === "daily" && dailyChallenge?.played
+        ? dailyChallenge.highestTier
+        : gameState.highestTierReached;
+
+    // Panel setup with bounce animation
     const panelX = width / 2;
     const panelY = context.height / 2;
-    const panelHeight = gameMode === 'daily' ? 240 : 200;
+    // Increased height to fit tier bar and mascot
+    const panelHeight = gameMode === "daily" ? 340 : dailyAlreadyPlayed ? 305 : 300;
+
+    // Set text alignment before save so it persists
+    ctx.textAlign = "center";
+
+    // Apply bounce scale animation
+    const scaleProgress = easeOutBack(Math.min(1, modalAnimationProgress * 1.2));
+    ctx.save();
+    ctx.translate(panelX, panelY);
+    ctx.scale(scaleProgress, scaleProgress);
+    ctx.translate(-panelX, -panelY);
+
+    // Panel background
     ctx.fillStyle = "rgba(230, 240, 225, 0.95)";
     ctx.strokeStyle = "#7A9B6D";
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.roundRect(panelX - 150, panelY - 80, 300, panelHeight, 16);
+    ctx.roundRect(panelX - 170, panelY - 110, 340, panelHeight, 16);
     ctx.fill();
     ctx.stroke();
 
-    ctx.textAlign = "center";
+    // Mini mochi mascot showing highest tier achieved (top right of panel)
+    const mascotX = panelX + 125;
+    const mascotY = panelY - 60;
+    const mascotSize = 26;
+    const mascotBounce = Math.sin(Date.now() / 300) * 3;
 
-    // Title - show day number for daily mode
+    // Check if mouse is hovering over mascot (for blush effect)
+    const mascotDx = mouseX - mascotX;
+    const mascotDy = mouseY - (mascotY + mascotBounce);
+    const isHoveringMascot = Math.sqrt(mascotDx * mascotDx + mascotDy * mascotDy) < mascotSize + 10;
+
+    // Get colors for the highest tier achieved
+    const tierData = mochiTiers[highestTier];
+    const mascotHappy = highestTier >= 5 || displayedScore >= 1000;
+
+    // Draw mascot body with tier colors
+    const mascotGradient = ctx.createRadialGradient(
+      mascotX - mascotSize * 0.2,
+      mascotY + mascotBounce - mascotSize * 0.2,
+      0,
+      mascotX,
+      mascotY + mascotBounce,
+      mascotSize * 1.2,
+    );
+    mascotGradient.addColorStop(0, tierData.color.highlight);
+    mascotGradient.addColorStop(0.3, tierData.color.primary);
+    mascotGradient.addColorStop(1, tierData.color.secondary);
+    ctx.fillStyle = mascotGradient;
+    ctx.beginPath();
+    ctx.arc(mascotX, mascotY + mascotBounce, mascotSize, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Mascot face - adjust colors for dark tiers
+    const isDarkTier = highestTier >= 8; // Chocolate, Black Sesame, Kuromame are dark
+    const faceColor = isDarkTier ? "#E8E4E0" : "#3D3530";
+    const eyeY = mascotY + mascotBounce - 3;
+
+    ctx.strokeStyle = faceColor;
+    ctx.fillStyle = faceColor;
+    ctx.lineWidth = 1.5;
+
+    // Eyes (happy = curved, shy/blushing = ^^ when hovered)
+    if (isHoveringMascot) {
+      // Shy happy eyes when hovered ^^
+      ctx.beginPath();
+      ctx.arc(mascotX - 7, eyeY, 3.5, Math.PI * 1.2, Math.PI * 1.8);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(mascotX + 7, eyeY, 3.5, Math.PI * 1.2, Math.PI * 1.8);
+      ctx.stroke();
+    } else if (mascotHappy) {
+      ctx.beginPath();
+      ctx.arc(mascotX - 7, eyeY, 3.5, Math.PI, 0, true);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(mascotX + 7, eyeY, 3.5, Math.PI, 0, true);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.arc(mascotX - 7, eyeY, 2.5, 0, Math.PI * 2);
+      ctx.arc(mascotX + 7, eyeY, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Cheeks - blush more when hovered!
+    const blushIntensity = isHoveringMascot ? 0.9 : 0.6;
+    const blushSize = isHoveringMascot ? 1.3 : 1;
+    ctx.fillStyle = tierData.color.cheek;
+    ctx.globalAlpha = blushIntensity;
+    ctx.beginPath();
+    ctx.ellipse(
+      mascotX - 14,
+      mascotY + mascotBounce + 4,
+      5 * blushSize,
+      3.5 * blushSize,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.ellipse(
+      mascotX + 14,
+      mascotY + mascotBounce + 4,
+      5 * blushSize,
+      3.5 * blushSize,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Mouth - small shy smile when hovered
+    ctx.strokeStyle = faceColor;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    if (isHoveringMascot) {
+      // Small shy smile
+      ctx.arc(mascotX, mascotY + mascotBounce + 6, 3, 0.2 * Math.PI, 0.8 * Math.PI);
+    } else if (mascotHappy) {
+      ctx.arc(mascotX, mascotY + mascotBounce + 5, 4, 0.1 * Math.PI, 0.9 * Math.PI);
+    } else {
+      ctx.moveTo(mascotX - 3, mascotY + mascotBounce + 7);
+      ctx.lineTo(mascotX + 3, mascotY + mascotBounce + 7);
+    }
+    ctx.stroke();
+
+    // Title - show day number for daily mode (centered in panel)
     ctx.fillStyle = "#3D5A3A";
-    if (gameMode === 'daily' && dailyChallenge) {
+    if (gameMode === "daily" && dailyChallenge) {
       const dayNum = getDayNumber(dailyChallenge.date);
       ctx.font = 'bold 28px "Segoe UI", sans-serif';
-      ctx.fillText(`Mochii #${dayNum}`, panelX, panelY - 45);
+      ctx.fillText(`Mochii #${dayNum}`, panelX, panelY - 70);
       ctx.font = '18px "Segoe UI", sans-serif';
       ctx.fillStyle = "#6B8A5E";
-      ctx.fillText("Daily Challenge", panelX, panelY - 22);
+      ctx.fillText("Daily Challenge", panelX, panelY - 47);
     } else {
       ctx.font = 'bold 32px "Segoe UI", sans-serif';
-      ctx.fillText("Game Over", panelX, panelY - 35);
+      ctx.fillText("Game Over", panelX, panelY - 60);
     }
 
-    // Score
-    ctx.font = '22px "Segoe UI", sans-serif';
+    // Animated score counter
+    ctx.font = 'bold 26px "Segoe UI", sans-serif';
     ctx.fillStyle = "#4A6741";
-    ctx.fillText(`Score: ${score}`, panelX, panelY + 10);
+    ctx.fillText(`Score: ${Math.floor(displayedScore).toLocaleString()}`, panelX, panelY - 12);
 
-    // Button styling helper
-    const drawButton = (text: string, y: number, highlighted: boolean = false) => {
-      const btnWidth = 120;
-      const btnHeight = 28;
-      ctx.fillStyle = highlighted ? "#7A9B6D" : "rgba(122, 155, 109, 0.3)";
+    // Tier progression bar
+    const tierBarY = panelY + 18;
+    const tierBarWidth = 280;
+    const tierBarX = panelX - tierBarWidth / 2;
+    const tierCount = 11; // Total tiers (0-10)
+    const dotSize = 8;
+    const dotSpacing = tierBarWidth / (tierCount - 1);
+
+    // Draw tier progression
+    for (let i = 0; i < tierCount; i++) {
+      const dotX = tierBarX + i * dotSpacing;
+      const reached = i <= highestTier;
+      const isHighest = i === highestTier;
+
+      // Animate dots appearing
+      const dotDelay = i * 0.05;
+      const dotProgress = Math.max(0, Math.min(1, (modalAnimationProgress - dotDelay) * 2));
+
+      if (dotProgress > 0) {
+        ctx.save();
+        ctx.globalAlpha = dotProgress;
+
+        // Get tier color
+        const tierColors = [
+          "#F8F4EC",
+          "#F8D7DD",
+          "#F8E8A0",
+          "#F4A0A8",
+          "#F8C878",
+          "#A8C890",
+          "#C8A8D0",
+          "#C8A888",
+          "#8B6850",
+          "#5A5550",
+          "#3A3530",
+        ];
+
+        if (reached) {
+          // Filled dot with tier color
+          const pulseScale = isHighest ? 1 + Math.sin(Date.now() / 200) * 0.15 : 1;
+          ctx.fillStyle = tierColors[i];
+          ctx.strokeStyle = "rgba(60, 80, 50, 0.4)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(dotX, tierBarY, (dotSize / 2) * pulseScale * dotProgress, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          // Empty dot
+          ctx.fillStyle = "rgba(200, 200, 190, 0.5)";
+          ctx.beginPath();
+          ctx.arc(dotX, tierBarY, (dotSize / 2 - 1) * dotProgress, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+    }
+
+    // Tier label
+    const tierNames = [
+      "Vanilla",
+      "Sakura",
+      "Yuzu",
+      "Strawberry",
+      "Mango",
+      "Matcha",
+      "Taro",
+      "Hojicha",
+      "Chocolate",
+      "Sesame",
+      "Kuromame",
+    ];
+    ctx.font = '12px "Segoe UI", sans-serif';
+    ctx.fillStyle = "#6B8A5E";
+    ctx.fillText(`Highest: ${tierNames[highestTier] || "Vanilla"}`, panelX, tierBarY + 22);
+
+    ctx.restore(); // Restore from scale transform
+
+    // Ensure text alignment is centered for buttons
+    ctx.textAlign = "center";
+
+    // Button styling helper - larger, more comfortable buttons with hover effects
+    const drawButton = (
+      text: string,
+      y: number,
+      style: "primary" | "secondary" | "tertiary" = "secondary",
+      buttonId: "daily" | "freeplay" | "share",
+    ) => {
+      const isHovered = hoveredButton === buttonId;
+      const hoverAmount = isHovered ? easeOutCubic(buttonHoverProgress) : 0;
+
+      // Animated scale on hover
+      const baseWidth = 180;
+      const baseHeight = 44;
+      const scaleBoost = hoverAmount * 0.05;
+      const btnWidth = baseWidth * (1 + scaleBoost);
+      const btnHeight = baseHeight * (1 + scaleBoost);
+
+      ctx.save();
+      ctx.textAlign = "center"; // Ensure centered text in buttons
+
+      // Different styles for visual hierarchy with hover enhancements
+      if (style === "primary") {
+        // Primary: solid green, gets brighter on hover
+        const brightness = 1 + hoverAmount * 0.15;
+        const r = Math.min(255, Math.round(122 * brightness));
+        const g = Math.min(255, Math.round(155 * brightness));
+        const b = Math.min(255, Math.round(109 * brightness));
+        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+        ctx.shadowColor = `rgba(0, 0, 0, ${0.15 + hoverAmount * 0.1})`;
+        ctx.shadowBlur = 4 + hoverAmount * 6;
+        ctx.shadowOffsetY = 2 + hoverAmount * 2;
+      } else if (style === "secondary") {
+        // Secondary: transparent, fills in on hover
+        const bgAlpha = 0.25 + hoverAmount * 0.35;
+        ctx.fillStyle = `rgba(122, 155, 109, ${bgAlpha})`;
+        if (isHovered) {
+          ctx.shadowColor = `rgba(122, 155, 109, ${hoverAmount * 0.3})`;
+          ctx.shadowBlur = hoverAmount * 8;
+          ctx.shadowOffsetY = hoverAmount * 2;
+        }
+      } else {
+        // Tertiary: subtle, becomes more visible on hover
+        const bgAlpha = 0.15 + hoverAmount * 0.25;
+        ctx.fillStyle = `rgba(122, 155, 109, ${bgAlpha})`;
+        if (isHovered) {
+          ctx.shadowColor = `rgba(122, 155, 109, ${hoverAmount * 0.2})`;
+          ctx.shadowBlur = hoverAmount * 6;
+        }
+      }
+
       ctx.beginPath();
-      ctx.roundRect(panelX - btnWidth/2, y - btnHeight/2, btnWidth, btnHeight, 8);
+      ctx.roundRect(panelX - btnWidth / 2, y - btnHeight / 2, btnWidth, btnHeight, 12);
       ctx.fill();
-      ctx.fillStyle = highlighted ? "#FFFFFF" : "#4A6741";
-      ctx.font = '14px "Segoe UI", sans-serif';
-      ctx.fillText(text, panelX, y + 5);
+
+      // Reset shadow before border
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+
+      // Border for secondary/tertiary buttons - gets more prominent on hover
+      if (style !== "primary") {
+        const borderAlpha = 0.4 + hoverAmount * 0.3;
+        ctx.strokeStyle = `rgba(122, 155, 109, ${borderAlpha})`;
+        ctx.lineWidth = 1.5 + hoverAmount * 0.5;
+        ctx.stroke();
+      }
+
+      // Text color - white for primary, darker green for others (with hover adjustment)
+      if (style === "primary") {
+        ctx.fillStyle = "#FFFFFF";
+      } else {
+        // Text gets slightly darker/more prominent on hover
+        const textAlpha = 1 - hoverAmount * 0.1;
+        ctx.fillStyle = `rgba(60, 85, 52, ${textAlpha + hoverAmount * 0.1})`;
+      }
+
+      // Font size slightly increases on hover
+      const baseFontSize = style === "primary" ? 16 : 15;
+      const fontSize = baseFontSize + hoverAmount * 1;
+      ctx.font =
+        style === "primary"
+          ? `bold ${fontSize}px "Segoe UI", sans-serif`
+          : `${fontSize}px "Segoe UI", sans-serif`;
+      ctx.fillText(text, panelX, y + 6);
+
+      ctx.restore();
     };
 
-    // Buttons
-    const dailyBtnY = panelY + 35;
-    const practiceBtnY = panelY + 70;
-    const shareBtnY = panelY + 105;
+    // Buttons with more spacing (adjusted for tier bar)
+    const dailyBtnY = panelY + 70;
+    const practiceBtnY = panelY + 125;
+    const shareBtnY = panelY + 180;
 
-    // Check if daily already played
-    const dailyAlreadyPlayed = dailyChallenge?.played && gameMode !== 'daily';
-    const canPlayDaily = !dailyAlreadyPlayed || (gameMode === 'daily' && dailyChallenge?.played);
+    if (dailyAlreadyPlayed) {
+      // Daily already completed - show friendly message instead of confusing button
+      ctx.fillStyle = "#7A9B6D";
+      ctx.font = '14px "Segoe UI", sans-serif';
+      ctx.fillText("✓ Today's daily complete!", panelX, dailyBtnY - 5);
+      ctx.fillStyle = "#8BA37E";
+      ctx.font = '12px "Segoe UI", sans-serif';
+      ctx.fillText("Come back tomorrow for a new challenge", panelX, dailyBtnY + 12);
 
-    drawButton(canPlayDaily && dailyChallenge?.played ? "Daily ✓" : "Daily Challenge", dailyBtnY, gameMode === 'daily');
-    drawButton("Free Play", practiceBtnY, gameMode === 'practice');
+      // Free Play button - moved up slightly and is primary
+      drawButton("Free Play", practiceBtnY, "primary", "freeplay");
+    } else {
+      // Daily button - primary if in daily mode, secondary otherwise
+      const dailyText =
+        gameMode === "daily" && dailyChallenge?.played ? "Daily ✓" : "Daily Challenge";
+      drawButton(dailyText, dailyBtnY, gameMode === "daily" ? "primary" : "secondary", "daily");
+
+      // Free Play button - primary if in practice mode
+      drawButton(
+        "Free Play",
+        practiceBtnY,
+        gameMode === "practice" ? "primary" : "secondary",
+        "freeplay",
+      );
+    }
 
     // Share button only for daily mode
-    if (gameMode === 'daily' && dailyChallenge) {
-      drawButton("📋 Share", shareBtnY, false);
+    if (gameMode === "daily" && dailyChallenge) {
+      const shareText = gameState.shareCopiedTimer > 0 ? "✓ Copied!" : "📋 Share";
+      const shareStyle = gameState.shareCopiedTimer > 0 ? "primary" : "tertiary";
+      drawButton(shareText, shareBtnY, shareStyle, "share");
     }
+  }
+
+  // Draw info tooltip LAST (highest z-index, overlaps everything)
+  if (infoTooltipData) {
+    const tooltipX = infoTooltipData.x;
+    const tooltipY = infoTooltipData.y;
+    const currentMode = infoTooltipData.gameMode;
+    const isNight = infoTooltipData.nightMode;
+
+    ctx.save();
+    ctx.font = '12px "Segoe UI", sans-serif';
+
+    // Multi-line tooltip content
+    const lines = [
+      currentMode === "daily"
+        ? "▸ Daily: Same puzzle for all, once a day!"
+        : "  Daily: Same puzzle for all, once a day!",
+      currentMode === "practice"
+        ? "▸ Free Play: Unlimited random practice"
+        : "  Free Play: Unlimited random practice",
+    ];
+
+    const lineHeight = 20;
+    const paddingLeft = 12;
+    const paddingRight = 18;
+    const paddingY = 10;
+    const maxLineWidth = Math.max(...lines.map((l) => ctx.measureText(l).width));
+    const tooltipWidth = maxLineWidth + paddingLeft + paddingRight;
+    const tooltipHeight = lines.length * lineHeight + paddingY * 2;
+
+    // Tooltip background with arrow
+    ctx.fillStyle = isNight ? "rgba(30, 40, 55, 0.97)" : "rgba(50, 65, 45, 0.97)";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 4;
+
+    // Arrow pointing up
+    ctx.beginPath();
+    ctx.moveTo(tooltipX - 8, tooltipY);
+    ctx.lineTo(tooltipX, tooltipY - 8);
+    ctx.lineTo(tooltipX + 8, tooltipY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Rounded rectangle
+    ctx.beginPath();
+    ctx.roundRect(tooltipX - tooltipWidth / 2, tooltipY, tooltipWidth, tooltipHeight, 8);
+    ctx.fill();
+
+    // Reset shadow
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+
+    // Tooltip text
+    ctx.textAlign = "left";
+    const textX = tooltipX - tooltipWidth / 2 + paddingLeft;
+    const textStartY = tooltipY + paddingY + 12; // 12 = approximate font ascent
+    lines.forEach((line, i) => {
+      const isCurrentMode = line.startsWith("▸");
+      ctx.fillStyle = isCurrentMode ? "#90EE90" : "rgba(255, 255, 255, 0.7)";
+      ctx.font = isCurrentMode ? 'bold 12px "Segoe UI", sans-serif' : '12px "Segoe UI", sans-serif';
+      ctx.fillText(line, textX, textStartY + i * lineHeight);
+    });
+
+    ctx.restore();
   }
 }
 
@@ -1930,7 +2377,13 @@ const toggleAnim = {
 };
 
 // Draw mode toggle switch (mochi-inspired pill shape with animations)
-function drawModeToggle(ctx: CanvasRenderingContext2D, x: number, y: number, isDaily: boolean, nightMode: boolean): void {
+function drawModeToggle(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  isDaily: boolean,
+  nightMode: boolean,
+): void {
   const toggleWidth = 70;
   const toggleHeight = 28;
   const knobRadius = 11;
@@ -1965,7 +2418,7 @@ function drawModeToggle(ctx: CanvasRenderingContext2D, x: number, y: number, isD
   ctx.fill();
 
   // Toggle track (pill shape) with inner shadow effect
-  const trackGradient = ctx.createLinearGradient(x, y - toggleHeight/2, x, y + toggleHeight/2);
+  const trackGradient = ctx.createLinearGradient(x, y - toggleHeight / 2, x, y + toggleHeight / 2);
   if (nightMode) {
     trackGradient.addColorStop(0, "rgba(50, 70, 100, 0.8)");
     trackGradient.addColorStop(0.5, "rgba(60, 85, 120, 0.75)");
@@ -1978,16 +2431,33 @@ function drawModeToggle(ctx: CanvasRenderingContext2D, x: number, y: number, isD
 
   ctx.fillStyle = trackGradient;
   ctx.beginPath();
-  ctx.roundRect(x - toggleWidth/2, y - toggleHeight/2, toggleWidth, toggleHeight, toggleHeight/2);
+  ctx.roundRect(
+    x - toggleWidth / 2,
+    y - toggleHeight / 2,
+    toggleWidth,
+    toggleHeight,
+    toggleHeight / 2,
+  );
   ctx.fill();
 
   // Inner shadow for depth
-  const innerShadow = ctx.createLinearGradient(x, y - toggleHeight/2, x, y - toggleHeight/2 + 8);
+  const innerShadow = ctx.createLinearGradient(
+    x,
+    y - toggleHeight / 2,
+    x,
+    y - toggleHeight / 2 + 8,
+  );
   innerShadow.addColorStop(0, "rgba(0, 0, 0, 0.12)");
   innerShadow.addColorStop(1, "rgba(0, 0, 0, 0)");
   ctx.fillStyle = innerShadow;
   ctx.beginPath();
-  ctx.roundRect(x - toggleWidth/2, y - toggleHeight/2, toggleWidth, toggleHeight, toggleHeight/2);
+  ctx.roundRect(
+    x - toggleWidth / 2,
+    y - toggleHeight / 2,
+    toggleWidth,
+    toggleHeight,
+    toggleHeight / 2,
+  );
   ctx.fill();
 
   // Soft border
@@ -2002,17 +2472,21 @@ function drawModeToggle(ctx: CanvasRenderingContext2D, x: number, y: number, isD
 
   // Daily label
   const dailyAlpha = 0.4 + (1 - toggleAnim.knobPosition) * 0.4;
-  ctx.fillStyle = nightMode ? `rgba(200, 230, 255, ${dailyAlpha})` : `rgba(50, 80, 40, ${dailyAlpha})`;
-  ctx.fillText("D", x - toggleWidth/2 + 13, y);
+  ctx.fillStyle = nightMode
+    ? `rgba(200, 230, 255, ${dailyAlpha})`
+    : `rgba(50, 80, 40, ${dailyAlpha})`;
+  ctx.fillText("D", x - toggleWidth / 2 + 13, y);
 
   // Free play label
   const freeAlpha = 0.4 + toggleAnim.knobPosition * 0.4;
-  ctx.fillStyle = nightMode ? `rgba(200, 230, 255, ${freeAlpha})` : `rgba(50, 80, 40, ${freeAlpha})`;
-  ctx.fillText("F", x + toggleWidth/2 - 13, y);
+  ctx.fillStyle = nightMode
+    ? `rgba(200, 230, 255, ${freeAlpha})`
+    : `rgba(50, 80, 40, ${freeAlpha})`;
+  ctx.fillText("F", x + toggleWidth / 2 - 13, y);
 
   // Calculate animated knob position
-  const leftX = x - toggleWidth/2 + knobRadius + padding;
-  const rightX = x + toggleWidth/2 - knobRadius - padding;
+  const leftX = x - toggleWidth / 2 + knobRadius + padding;
+  const rightX = x + toggleWidth / 2 - knobRadius - padding;
   const knobX = leftX + (rightX - leftX) * toggleAnim.knobPosition;
 
   // Squish deformation
@@ -2044,7 +2518,14 @@ function drawModeToggle(ctx: CanvasRenderingContext2D, x: number, y: number, isD
   ctx.fill();
 
   // Knob highlight (glossy effect)
-  const highlightGradient = ctx.createRadialGradient(knobX - 3, y - 4, 0, knobX - 2, y - 3, knobRadius * 0.7);
+  const highlightGradient = ctx.createRadialGradient(
+    knobX - 3,
+    y - 4,
+    0,
+    knobX - 2,
+    y - 3,
+    knobRadius * 0.7,
+  );
   highlightGradient.addColorStop(0, "rgba(255, 255, 255, 0.6)");
   highlightGradient.addColorStop(0.5, "rgba(255, 255, 255, 0.2)");
   highlightGradient.addColorStop(1, "rgba(255, 255, 255, 0)");
@@ -2093,7 +2574,13 @@ export const MODE_TOGGLE_BOUNDS = {
   height: 28,
 };
 
-function drawSpeakerIcon(ctx: CanvasRenderingContext2D, width: number, height: number, soundEnabled: boolean, nightMode: boolean): void {
+function drawSpeakerIcon(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  soundEnabled: boolean,
+  nightMode: boolean,
+): void {
   const x = width - 30;
   const y = height - 30;
 
@@ -2149,7 +2636,14 @@ function drawVignette(ctx: CanvasRenderingContext2D, width: number, height: numb
   const centerY = height / 2;
   const radius = Math.max(width, height) * 0.75;
 
-  const gradient = ctx.createRadialGradient(centerX, centerY, radius * 0.25, centerX, centerY, radius);
+  const gradient = ctx.createRadialGradient(
+    centerX,
+    centerY,
+    radius * 0.25,
+    centerX,
+    centerY,
+    radius,
+  );
   gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
   gradient.addColorStop(0.4, "rgba(0, 0, 0, 0)");
   gradient.addColorStop(0.6, "rgba(35, 25, 15, 0.08)");
@@ -2161,7 +2655,12 @@ function drawVignette(ctx: CanvasRenderingContext2D, width: number, height: numb
   ctx.fillRect(0, 0, width, height);
 }
 
-function drawWarmOverlay(ctx: CanvasRenderingContext2D, width: number, height: number, nightMode: boolean): void {
+function drawWarmOverlay(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  nightMode: boolean,
+): void {
   if (nightMode) {
     // Subtle cool blue tint at night
     ctx.fillStyle = "rgba(100, 120, 150, 0.03)";
@@ -2172,7 +2671,12 @@ function drawWarmOverlay(ctx: CanvasRenderingContext2D, width: number, height: n
   ctx.fillRect(0, 0, width, height);
 }
 
-function drawMoon(ctx: CanvasRenderingContext2D, width: number, height: number, nightMode: boolean): void {
+function drawMoon(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  nightMode: boolean,
+): void {
   const isMobile = width < 500 || height < 700;
   const moonX = width - 35;
   const moonY = isMobile ? 55 : 35; // Lower on mobile for easier tap
@@ -2197,8 +2701,12 @@ function drawMoon(ctx: CanvasRenderingContext2D, width: number, height: number, 
       const cloudOffset = Math.sin(time + i * 2) * 15;
       const cloudY = moonY - 5 + i * 8;
       const cloudGradient = ctx.createRadialGradient(
-        moonX + cloudOffset, cloudY, 5,
-        moonX + cloudOffset, cloudY, 25 + i * 5
+        moonX + cloudOffset,
+        cloudY,
+        5,
+        moonX + cloudOffset,
+        cloudY,
+        25 + i * 5,
       );
       cloudGradient.addColorStop(0, "rgba(180, 200, 220, 0.6)");
       cloudGradient.addColorStop(1, "rgba(100, 130, 160, 0)");
@@ -2271,9 +2779,15 @@ export function render(
   clearCanvas(context, gameState.nightMode);
 
   // Draw daily mode watermark (big muted day number in background)
-  if (gameState.gameMode === 'daily' && gameState.dailyChallenge) {
+  if (gameState.gameMode === "daily" && gameState.dailyChallenge) {
     const dayNum = getDayNumber(gameState.dailyChallenge.date);
-    drawDailyWatermark(context.ctx, context.width, gameState.container.y, dayNum, gameState.nightMode);
+    drawDailyWatermark(
+      context.ctx,
+      context.width,
+      gameState.container.y,
+      dayNum,
+      gameState.nightMode,
+    );
   }
 
   drawContainer(context, gameState.container, gameState.nightMode);
@@ -2310,7 +2824,13 @@ export function render(
   drawMoon(context.ctx, context.width, context.height, gameState.nightMode);
 
   // Draw speaker toggle icon
-  drawSpeakerIcon(context.ctx, context.width, context.height, gameState.soundEnabled, gameState.nightMode);
+  drawSpeakerIcon(
+    context.ctx,
+    context.width,
+    context.height,
+    gameState.soundEnabled,
+    gameState.nightMode,
+  );
 
   // Apply cozy post-processing effects
   drawWarmOverlay(context.ctx, context.width, context.height, gameState.nightMode);

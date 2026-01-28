@@ -82,6 +82,8 @@ export interface PhysicsConfig {
   squishRecovery: number;
 }
 
+export type HoveredButton = 'daily' | 'freeplay' | 'share' | null;
+
 export interface GameState {
   score: number;
   highScore: number;
@@ -94,6 +96,16 @@ export interface GameState {
   container: Container;
   mouseX: number;
   mouseY: number;
+  // UI hover state
+  hoveredButton: HoveredButton;
+  buttonHoverProgress: number; // 0-1 animation progress
+  // Share button feedback
+  shareCopiedTimer: number; // Countdown for "Copied!" feedback
+  // Modal animation state
+  modalAnimationProgress: number; // 0-1 for entrance animation
+  displayedScore: number; // Animated score counter
+  // Info tooltip state (for mobile tap)
+  infoTooltipTimer: number; // Countdown for showing tooltip on mobile
   // Easter egg states
   nightMode: boolean;
   lastInteraction: number;

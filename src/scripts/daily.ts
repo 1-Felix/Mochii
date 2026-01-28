@@ -113,7 +113,7 @@ export function generateShareText(challenge: DailyChallenge): string {
     tierProgression,
     `Merges: ${challenge.mergeCount}`,
     '',
-    'https://mochii.game', // Replace with actual URL
+    'https://mochii.dev',
   ];
 
   return lines.join('\n');

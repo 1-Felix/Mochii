@@ -153,6 +153,16 @@ function initGameState(mode: GameMode = 'daily'): void {
     container,
     mouseX: 0,
     mouseY: 0,
+    // UI hover state
+    hoveredButton: null,
+    buttonHoverProgress: 0,
+    // Share button feedback
+    shareCopiedTimer: 0,
+    // Modal animation state
+    modalAnimationProgress: dailyChallenge?.played ? 1 : 0, // Start complete if showing results
+    displayedScore: dailyChallenge?.played ? dailyChallenge.score : 0,
+    // Info tooltip state
+    infoTooltipTimer: 0,
     // Easter eggs
     nightMode: wasNightMode,
     lastInteraction: Date.now(),
@@ -441,6 +451,9 @@ function update(dt: number): void {
   // Check game over
   if (checkGameOver()) {
     gameState.gameOver = true;
+    // Start modal animation
+    gameState.modalAnimationProgress = 0;
+    gameState.displayedScore = 0;
     // Submit score to leaderboard with mode and date
     if (gameState.score > 0) {
       const dailyDate = gameState.gameMode === 'daily' ? getTodayString() : undefined;
@@ -483,6 +496,43 @@ function gameLoop(timestamp: number): void {
     }
   }
 
+  // Animate button hover progress (smooth ease in/out)
+  if (gameState.hoveredButton) {
+    gameState.buttonHoverProgress = Math.min(1, gameState.buttonHoverProgress + dt * 0.15);
+  } else {
+    gameState.buttonHoverProgress = Math.max(0, gameState.buttonHoverProgress - dt * 0.15);
+  }
+
+  // Update share copied feedback timer
+  if (gameState.shareCopiedTimer > 0) {
+    gameState.shareCopiedTimer = Math.max(0, gameState.shareCopiedTimer - dt);
+  }
+
+  // Update info tooltip timer (for mobile)
+  if (gameState.infoTooltipTimer > 0) {
+    gameState.infoTooltipTimer = Math.max(0, gameState.infoTooltipTimer - dt);
+  }
+
+  // Animate modal entrance and score counter when game over
+  if (gameState.gameOver) {
+    // Modal entrance animation (0 to 1 over ~0.5 seconds)
+    if (gameState.modalAnimationProgress < 1) {
+      gameState.modalAnimationProgress = Math.min(1, gameState.modalAnimationProgress + dt * 0.04);
+    }
+
+    // Get target score (use daily score if viewing completed daily)
+    const targetScore = (gameState.gameMode === 'daily' && gameState.dailyChallenge?.played)
+      ? gameState.dailyChallenge.score
+      : gameState.score;
+
+    // Animate score counter (counts up with easing)
+    if (gameState.displayedScore < targetScore) {
+      const remaining = targetScore - gameState.displayedScore;
+      const increment = Math.max(1, Math.ceil(remaining * 0.08 * dt));
+      gameState.displayedScore = Math.min(targetScore, gameState.displayedScore + increment);
+    }
+  }
+
   update(dt);
   updateEasterEggs(dt);
 
@@ -516,6 +566,55 @@ function handleMouseMove(e: MouseEvent): void {
   gameState.mouseX = e.clientX - rect.left;
   gameState.mouseY = e.clientY - rect.top;
   gameState.lastInteraction = Date.now();
+
+  // Update button hover state when game over
+  if (gameState.gameOver) {
+    gameState.hoveredButton = getHoveredButton(gameState.mouseX, gameState.mouseY);
+    // Change cursor to pointer when hovering a button
+    context.canvas.style.cursor = gameState.hoveredButton ? 'pointer' : 'default';
+  } else {
+    gameState.hoveredButton = null;
+    context.canvas.style.cursor = 'default';
+  }
+}
+
+// Check which game over button is being hovered
+function getHoveredButton(x: number, y: number): 'daily' | 'freeplay' | 'share' | null {
+  const centerX = context.width / 2;
+  const centerY = context.height / 2;
+
+  // Button positions (must match renderer)
+  const dailyBtnY = centerY + 50;
+  const practiceBtnY = centerY + 105;
+  const shareBtnY = centerY + 160;
+  const btnWidth = 180;
+  const btnHeight = 44;
+
+  // Check if daily already played (button is replaced with message)
+  const dailyAlreadyPlayed = gameState.dailyChallenge?.played === true;
+
+  // Check Daily button (only if not replaced with message)
+  if (!dailyAlreadyPlayed &&
+      x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
+      y >= dailyBtnY - btnHeight/2 && y <= dailyBtnY + btnHeight/2) {
+    return 'daily';
+  }
+
+  // Check Free Play button
+  if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
+      y >= practiceBtnY - btnHeight/2 && y <= practiceBtnY + btnHeight/2) {
+    return 'freeplay';
+  }
+
+  // Check Share button (only in daily mode)
+  if (gameState.gameMode === 'daily' && gameState.dailyChallenge) {
+    if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
+        y >= shareBtnY - btnHeight/2 && y <= shareBtnY + btnHeight/2) {
+      return 'share';
+    }
+  }
+
+  return null;
 }
 
 function handleKeyDown(e: KeyboardEvent): void {
@@ -568,19 +667,34 @@ function triggerCatEasterEgg(): void {
   }
 }
 
-// Check if click is on mode toggle (position is dynamic based on score width)
-function isToggleClick(clickX: number, clickY: number): boolean {
-  // Calculate toggle position (must match renderer.ts)
+// Calculate toggle position (shared helper)
+function getTogglePosition(): { toggleX: number; toggleY: number } {
   const scoreText = `Score: ${gameState.score}`;
   // Estimate score width (approximately 10px per character for bold 24px font)
   const scoreWidth = scoreText.length * 10;
   const toggleX = 20 + scoreWidth + 50;
   const toggleY = 28;
+  return { toggleX, toggleY };
+}
 
+// Check if click is on mode toggle (position is dynamic based on score width)
+function isToggleClick(clickX: number, clickY: number): boolean {
+  const { toggleX, toggleY } = getTogglePosition();
   const halfWidth = MODE_TOGGLE_BOUNDS.width / 2;
   const halfHeight = MODE_TOGGLE_BOUNDS.height / 2;
   return clickX >= toggleX - halfWidth && clickX <= toggleX + halfWidth &&
          clickY >= toggleY - halfHeight && clickY <= toggleY + halfHeight;
+}
+
+// Check if click is on info icon (next to toggle)
+function isInfoIconClick(clickX: number, clickY: number): boolean {
+  const { toggleX, toggleY } = getTogglePosition();
+  const infoX = toggleX + 48;
+  const infoY = toggleY;
+  const infoRadius = 15; // Slightly larger tap target
+  const dx = clickX - infoX;
+  const dy = clickY - infoY;
+  return Math.sqrt(dx * dx + dy * dy) < infoRadius;
 }
 
 // Handle mode toggle - switch between daily and free play
@@ -595,9 +709,15 @@ function handleClick(e: MouseEvent): void {
   const y = e.clientY - rect.top;
   gameState.lastInteraction = Date.now();
 
-  // Check for mode toggle click (top left area)
-  if (!gameState.gameOver && isToggleClick(x, y)) {
+  // Check for mode toggle click (top left area) - works even in game over
+  if (isToggleClick(x, y)) {
     handleModeToggle();
+    return;
+  }
+
+  // Check for info icon click (shows tooltip)
+  if (isInfoIconClick(x, y)) {
+    gameState.infoTooltipTimer = 180; // Show for ~3 seconds
     return;
   }
 
@@ -641,14 +761,18 @@ function handleClick(e: MouseEvent): void {
     const centerY = context.height / 2;
 
     // Button positions (must match renderer)
-    const dailyBtnY = centerY + 35;
-    const practiceBtnY = centerY + 70;
-    const shareBtnY = centerY + 105;
-    const btnWidth = 120;
-    const btnHeight = 28;
+    const dailyBtnY = centerY + 70;
+    const practiceBtnY = centerY + 125;
+    const shareBtnY = centerY + 180;
+    const btnWidth = 180;
+    const btnHeight = 44;
 
-    // Check Daily Challenge button
-    if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
+    // Check if daily already played (button is replaced with message)
+    const dailyAlreadyPlayed = gameState.dailyChallenge?.played === true;
+
+    // Check Daily Challenge button (only if not already played)
+    if (!dailyAlreadyPlayed &&
+        x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
         y >= dailyBtnY - btnHeight/2 && y <= dailyBtnY + btnHeight/2) {
       initGameState('daily');
       return;
@@ -667,6 +791,24 @@ function handleClick(e: MouseEvent): void {
           y >= shareBtnY - btnHeight/2 && y <= shareBtnY + btnHeight/2) {
         const shareText = generateShareText(gameState.dailyChallenge);
         copyToClipboard(shareText);
+        gameState.shareCopiedTimer = 90; // ~1.5 seconds at 60fps
+        return;
+      }
+    }
+
+    // Click outside modal when daily is completed -> switch to Free Play
+    if (dailyAlreadyPlayed) {
+      // Modal bounds (must match renderer)
+      const panelWidth = 340;
+      const panelHeight = gameState.gameMode === 'daily' ? 340 : 305;
+      const panelLeft = centerX - 170;
+      const panelRight = centerX + 170;
+      const panelTop = centerY - 110;
+      const panelBottom = panelTop + panelHeight;
+
+      const isOutsideModal = x < panelLeft || x > panelRight || y < panelTop || y > panelBottom;
+      if (isOutsideModal) {
+        initGameState('practice');
         return;
       }
     }
@@ -696,9 +838,15 @@ function handleTouchEnd(e: TouchEvent): void {
   const x = touch ? touch.clientX - rect.left : gameState.dropX;
   const y = touch ? touch.clientY - rect.top : 0;
 
-  // Check for mode toggle tap (top left area)
-  if (!gameState.gameOver && isToggleClick(x, y)) {
+  // Check for mode toggle tap (top left area) - works even in game over
+  if (isToggleClick(x, y)) {
     handleModeToggle();
+    return;
+  }
+
+  // Check for info icon tap (shows tooltip)
+  if (isInfoIconClick(x, y)) {
+    gameState.infoTooltipTimer = 180; // Show for ~3 seconds
     return;
   }
 
@@ -740,14 +888,18 @@ function handleTouchEnd(e: TouchEvent): void {
     const centerY = context.height / 2;
 
     // Button positions (must match renderer)
-    const dailyBtnY = centerY + 35;
-    const practiceBtnY = centerY + 70;
-    const shareBtnY = centerY + 105;
-    const btnWidth = 120;
-    const btnHeight = 28;
+    const dailyBtnY = centerY + 70;
+    const practiceBtnY = centerY + 125;
+    const shareBtnY = centerY + 180;
+    const btnWidth = 180;
+    const btnHeight = 44;
 
-    // Check Daily Challenge button
-    if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
+    // Check if daily already played (button is replaced with message)
+    const dailyAlreadyPlayed = gameState.dailyChallenge?.played === true;
+
+    // Check Daily Challenge button (only if not already played)
+    if (!dailyAlreadyPlayed &&
+        x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
         y >= dailyBtnY - btnHeight/2 && y <= dailyBtnY + btnHeight/2) {
       initGameState('daily');
       return;
@@ -766,6 +918,24 @@ function handleTouchEnd(e: TouchEvent): void {
           y >= shareBtnY - btnHeight/2 && y <= shareBtnY + btnHeight/2) {
         const shareText = generateShareText(gameState.dailyChallenge);
         copyToClipboard(shareText);
+        gameState.shareCopiedTimer = 90; // ~1.5 seconds at 60fps
+        return;
+      }
+    }
+
+    // Tap outside modal when daily is completed -> switch to Free Play
+    if (dailyAlreadyPlayed) {
+      // Modal bounds (must match renderer)
+      const panelWidth = 340;
+      const panelHeight = gameState.gameMode === 'daily' ? 340 : 305;
+      const panelLeft = centerX - 170;
+      const panelRight = centerX + 170;
+      const panelTop = centerY - 110;
+      const panelBottom = panelTop + panelHeight;
+
+      const isOutsideModal = x < panelLeft || x > panelRight || y < panelTop || y > panelBottom;
+      if (isOutsideModal) {
+        initGameState('practice');
         return;
       }
     }
