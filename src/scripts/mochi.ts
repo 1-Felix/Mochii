@@ -27,8 +27,10 @@ let savedDailyState: SavedModeState | null = null;
 let savedFreePlayState: SavedModeState | null = null;
 
 // Get a random droppable tier (uses seeded random in daily mode)
-function getNextTier(): number {
-  const rand = gameState?.gameMode === 'daily' && seededRandom ? seededRandom() : Math.random();
+// Accepts optional mode override for use during initGameState before gameState is assigned
+function getNextTier(mode?: GameMode): number {
+  const isDaily = mode === 'daily' || gameState?.gameMode === 'daily';
+  const rand = isDaily && seededRandom ? seededRandom() : Math.random();
   return DROPPABLE_TIERS[Math.floor(rand * DROPPABLE_TIERS.length)];
 }
 
@@ -164,8 +166,8 @@ function initGameState(mode: GameMode = 'daily'): void {
     highScore: parseInt(localStorage.getItem('mochiHighScore') || '0'),
     gameOver: dailyChallenge?.played ?? false, // Show game over if already played
     currentMochi: null,
-    currentTier: getNextTier(), // What player is about to drop
-    nextTier: getNextTier(), // What's shown in "next" preview
+    currentTier: getNextTier(mode), // What player is about to drop
+    nextTier: getNextTier(mode), // What's shown in "next" preview
     dropX: container.x + container.width / 2,
     canDrop: !dailyChallenge?.played,
     container,
