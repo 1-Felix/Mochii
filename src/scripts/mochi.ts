@@ -739,15 +739,14 @@ function triggerCatEasterEgg(): void {
 
 // Calculate toggle position (shared helper)
 function getTogglePosition(): { toggleX: number; toggleY: number } {
-  const scoreText = `Score: ${gameState.score}`;
-  // Estimate score width (approximately 10px per character for bold 24px font)
-  const scoreWidth = scoreText.length * 10;
-  const toggleX = 20 + scoreWidth + 50;
+  // Fixed width to match renderer (accommodates scores up to 99,999)
+  const fixedScoreWidth = 140;
+  const toggleX = 20 + fixedScoreWidth + 50;
   const toggleY = 28;
   return { toggleX, toggleY };
 }
 
-// Check if click is on mode toggle (position is dynamic based on score width)
+// Check if click is on mode toggle
 function isToggleClick(clickX: number, clickY: number): boolean {
   const { toggleX, toggleY } = getTogglePosition();
   const halfWidth = MODE_TOGGLE_BOUNDS.width / 2;
@@ -767,8 +766,16 @@ function isInfoIconClick(clickX: number, clickY: number): boolean {
   return Math.sqrt(dx * dx + dy * dy) < infoRadius;
 }
 
+// Debounce for mode toggle to prevent double-triggering from touch + click
+let lastToggleTime = 0;
+
 // Handle mode toggle - switch between daily and free play (preserves state)
 function handleModeToggle(): void {
+  // Prevent rapid double-toggling (touch + click can both fire)
+  const now = Date.now();
+  if (now - lastToggleTime < 300) return;
+  lastToggleTime = now;
+
   const currentMode = gameState.gameMode;
   const newMode: GameMode = currentMode === 'daily' ? 'practice' : 'daily';
 

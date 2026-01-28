@@ -1108,18 +1108,6 @@ function drawFace(
       ctx.fill();
       ctx.fillStyle = "#4A4A4A";
 
-      // Small sparkles around face
-      ctx.fillStyle = "#FFE066";
-      const sparkleTime = Date.now() / 150;
-      for (let i = 0; i < 3; i++) {
-        const angle = (i * Math.PI * 2) / 3 + sparkleTime;
-        const dist = radius * 0.7 + Math.sin(sparkleTime * 2 + i) * 3;
-        const sparkleX = cx + Math.cos(angle) * dist;
-        const sparkleY = cy + Math.sin(angle) * dist * 0.6 - 5 * scale;
-        const sparkleSize = 2 * scale * (0.5 + Math.sin(sparkleTime * 3 + i * 2) * 0.5);
-        drawStar(sparkleX, sparkleY, sparkleSize, 4);
-      }
-      ctx.fillStyle = "#4A4A4A";
       break;
   }
 
@@ -1128,7 +1116,9 @@ function drawFace(
   const isStressed = emotion === "stressed";
   const isCelebrating = emotion === "celebrating";
   const blushOpacity =
-    emotion === "surprised" || isSquished || emotion === "love" || isStressed || isCelebrating ? 0.7 : 0.35;
+    emotion === "surprised" || isSquished || emotion === "love" || isStressed || isCelebrating
+      ? 0.7
+      : 0.35;
   const blushWidth = isSquished || isCelebrating ? 7 * scale : 5 * scale;
   const blushHeight = isSquished || isCelebrating ? 4 * scale : 3 * scale;
 
@@ -1325,13 +1315,14 @@ function drawFrostedOverlay(
   const innerX = x + wallThickness;
   const innerY = y;
   const innerWidth = width - wallThickness * 2;
+  // Height stops at the container border (don't overlap the bottom wall)
   const innerHeight = height - wallThickness;
 
   ctx.save();
 
   // Clip to container interior
   ctx.beginPath();
-  ctx.roundRect(innerX, innerY, innerWidth, innerHeight, 8);
+  ctx.roundRect(innerX, innerY, innerWidth, innerHeight, [8, 8, 0, 0]);
   ctx.clip();
 
   // Frosted glass effect - semi-transparent with gradient
@@ -1937,19 +1928,26 @@ export function drawUI(
   const spaceOnRight = width - (container.x + container.width);
   const isSmallScreen = spaceOnRight < 80;
 
-  // Score - matcha green text
+  // Score - matcha green text (fixed width container so toggle doesn't move)
   ctx.fillStyle = "#4A6741";
   ctx.font = 'bold 24px "Segoe UI", sans-serif';
   ctx.textAlign = "left";
   const scoreText = `Score: ${score}`;
   ctx.fillText(scoreText, 20, 35);
 
-  // Mode toggle switch (next to score on first line)
+  // Mode toggle switch (fixed position, not dependent on score width)
   const { gameMode } = gameState;
-  const scoreWidth = ctx.measureText(scoreText).width;
-  const toggleX = 20 + scoreWidth + 50; // After score with some spacing
+  const fixedScoreWidth = 140; // Fixed width to accommodate scores up to 99,999
+  const toggleX = 20 + fixedScoreWidth + 50;
   const toggleY = 28;
   drawModeToggle(ctx, toggleX, toggleY, gameMode === "daily", gameState.nightMode);
+
+  // Mode label underneath toggle
+  ctx.font = '10px "Segoe UI", sans-serif';
+  ctx.fillStyle = gameState.nightMode ? "rgba(150, 170, 190, 0.6)" : "rgba(90, 120, 80, 0.6)";
+  ctx.textAlign = "center";
+  ctx.fillText(gameMode === "daily" ? "Daily" : "Free Play", toggleX, toggleY + 26);
+  ctx.textAlign = "left"; // Reset for subsequent text
 
   // Info icon next to toggle (explains daily mode)
   const infoX = toggleX + 48;
