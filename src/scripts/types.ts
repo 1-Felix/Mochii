@@ -30,7 +30,7 @@ export interface MochiColor {
   cheek: string;
 }
 
-export type MochiEmotion = 'happy' | 'surprised' | 'squished' | 'flying' | 'sleepy' | 'love' | 'yawning' | 'stressed';
+export type MochiEmotion = 'happy' | 'surprised' | 'squished' | 'flying' | 'sleepy' | 'love' | 'yawning' | 'stressed' | 'celebrating';
 
 export interface Mochi {
   id: number;

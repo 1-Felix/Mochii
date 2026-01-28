@@ -1057,15 +1057,80 @@ function drawFace(
       ctx.quadraticCurveTo(cx + 3 * scale, faceY + 6 * scale, cx + 6 * scale, faceY + 8 * scale);
       ctx.stroke();
       break;
+
+    case "celebrating":
+      // Star eyes and big happy smile!
+      ctx.fillStyle = "#FFD700"; // Golden stars
+      const starSize = eyeSize * 1.8;
+
+      // Draw star helper
+      const drawStar = (sx: number, sy: number, size: number, points: number = 5) => {
+        ctx.beginPath();
+        for (let i = 0; i < points * 2; i++) {
+          const angle = (i * Math.PI) / points - Math.PI / 2;
+          const r = i % 2 === 0 ? size : size * 0.4;
+          const px = sx + Math.cos(angle) * r;
+          const py = sy + Math.sin(angle) * r;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+      };
+
+      // Star eyes with slight rotation animation
+      const starRotation = Math.sin(Date.now() / 200) * 0.1;
+      ctx.save();
+      ctx.translate(cx - eyeSpacing, faceY);
+      ctx.rotate(starRotation);
+      ctx.translate(-(cx - eyeSpacing), -faceY);
+      drawStar(cx - eyeSpacing, faceY, starSize);
+      ctx.restore();
+
+      ctx.save();
+      ctx.translate(cx + eyeSpacing, faceY);
+      ctx.rotate(-starRotation);
+      ctx.translate(-(cx + eyeSpacing), -faceY);
+      drawStar(cx + eyeSpacing, faceY, starSize);
+      ctx.restore();
+
+      ctx.fillStyle = "#4A4A4A";
+
+      // Big happy open mouth smile
+      ctx.beginPath();
+      ctx.arc(cx, faceY + 8 * scale, 8 * scale, 0, Math.PI);
+      ctx.fill();
+
+      // Tongue showing (cute detail)
+      ctx.fillStyle = "#E8A0A0";
+      ctx.beginPath();
+      ctx.ellipse(cx, faceY + 12 * scale, 4 * scale, 2.5 * scale, 0, 0, Math.PI);
+      ctx.fill();
+      ctx.fillStyle = "#4A4A4A";
+
+      // Small sparkles around face
+      ctx.fillStyle = "#FFE066";
+      const sparkleTime = Date.now() / 150;
+      for (let i = 0; i < 3; i++) {
+        const angle = (i * Math.PI * 2) / 3 + sparkleTime;
+        const dist = radius * 0.7 + Math.sin(sparkleTime * 2 + i) * 3;
+        const sparkleX = cx + Math.cos(angle) * dist;
+        const sparkleY = cy + Math.sin(angle) * dist * 0.6 - 5 * scale;
+        const sparkleSize = 2 * scale * (0.5 + Math.sin(sparkleTime * 3 + i * 2) * 0.5);
+        drawStar(sparkleX, sparkleY, sparkleSize, 4);
+      }
+      ctx.fillStyle = "#4A4A4A";
+      break;
   }
 
-  // Blush - extra big and rosy when squished or stressed!
+  // Blush - extra big and rosy when squished, stressed, or celebrating!
   const isSquished = emotion === "squished";
   const isStressed = emotion === "stressed";
+  const isCelebrating = emotion === "celebrating";
   const blushOpacity =
-    emotion === "surprised" || isSquished || emotion === "love" || isStressed ? 0.7 : 0.35;
-  const blushWidth = isSquished ? 7 * scale : 5 * scale;
-  const blushHeight = isSquished ? 4 * scale : 3 * scale;
+    emotion === "surprised" || isSquished || emotion === "love" || isStressed || isCelebrating ? 0.7 : 0.35;
+  const blushWidth = isSquished || isCelebrating ? 7 * scale : 5 * scale;
+  const blushHeight = isSquished || isCelebrating ? 4 * scale : 3 * scale;
 
   ctx.fillStyle = cheekColor;
   ctx.globalAlpha = blushOpacity;
@@ -1229,6 +1294,173 @@ function drawEffects(ctx: CanvasRenderingContext2D): void {
       ctx.fill();
     }
   }
+}
+
+// Draw subtle pulsing glow effect around a mochi (for highest tier in game over)
+function drawMochiGlow(ctx: CanvasRenderingContext2D, mochi: Mochi): void {
+  const { cx, cy, baseRadius, color } = mochi;
+  const time = Date.now() / 1000;
+  const pulseScale = 1 + Math.sin(time * 2) * 0.06;
+  const glowRadius = baseRadius * 1.8 * pulseScale;
+
+  // Soft outer glow
+  const glowGradient = ctx.createRadialGradient(cx, cy, baseRadius, cx, cy, glowRadius);
+  glowGradient.addColorStop(0, `${color.primary}25`);
+  glowGradient.addColorStop(0.5, `${color.highlight}15`);
+  glowGradient.addColorStop(1, `${color.primary}00`);
+
+  ctx.fillStyle = glowGradient;
+  ctx.beginPath();
+  ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Draw frosted glass overlay on the container
+function drawFrostedOverlay(
+  ctx: CanvasRenderingContext2D,
+  container: Container,
+  nightMode: boolean,
+): void {
+  const { x, y, width, height, wallThickness } = container;
+  const innerX = x + wallThickness;
+  const innerY = y;
+  const innerWidth = width - wallThickness * 2;
+  const innerHeight = height - wallThickness;
+
+  ctx.save();
+
+  // Clip to container interior
+  ctx.beginPath();
+  ctx.roundRect(innerX, innerY, innerWidth, innerHeight, 8);
+  ctx.clip();
+
+  // Frosted glass effect - semi-transparent with gradient
+  const frostGradient = ctx.createLinearGradient(innerX, innerY, innerX, innerY + innerHeight);
+  if (nightMode) {
+    frostGradient.addColorStop(0, "rgba(30, 35, 45, 0.75)");
+    frostGradient.addColorStop(0.5, "rgba(35, 40, 50, 0.7)");
+    frostGradient.addColorStop(1, "rgba(25, 30, 40, 0.8)");
+  } else {
+    frostGradient.addColorStop(0, "rgba(245, 250, 242, 0.75)");
+    frostGradient.addColorStop(0.5, "rgba(240, 248, 238, 0.7)");
+    frostGradient.addColorStop(1, "rgba(235, 245, 232, 0.8)");
+  }
+  ctx.fillStyle = frostGradient;
+  ctx.fillRect(innerX, innerY, innerWidth, innerHeight);
+
+  // Add subtle noise/texture for frosted look
+  ctx.globalAlpha = nightMode ? 0.03 : 0.05;
+  for (let i = 0; i < 50; i++) {
+    const nx = innerX + Math.random() * innerWidth;
+    const ny = innerY + Math.random() * innerHeight;
+    const nSize = 1 + Math.random() * 2;
+    ctx.fillStyle = nightMode ? "#fff" : "#000";
+    ctx.beginPath();
+    ctx.arc(nx, ny, nSize, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+}
+
+// Draw game over results on the frosted container overlay
+function drawGameOverResults(
+  ctx: CanvasRenderingContext2D,
+  container: Container,
+  gameState: GameState,
+  leaderboard: LeaderboardEntry[] | undefined,
+  playerName: string | undefined,
+): void {
+  const { x, y, width, height, wallThickness } = container;
+  const centerX = x + width / 2;
+  const centerY = y + height / 2;
+  const { gameMode, dailyChallenge, nightMode } = gameState;
+  const { modalAnimationProgress, displayedScore } = gameState;
+
+  // Animation easing
+  const easeOutBack = (t: number) => {
+    const c1 = 1.70158;
+    const c3 = c1 + 1;
+    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+  };
+  const scaleProgress = easeOutBack(Math.min(1, modalAnimationProgress * 1.2));
+
+  ctx.save();
+  ctx.translate(centerX, centerY);
+  ctx.scale(scaleProgress, scaleProgress);
+  ctx.translate(-centerX, -centerY);
+
+  ctx.textAlign = "center";
+
+  // Get highest tier reached
+  const highestTier =
+    gameMode === "daily" && dailyChallenge?.played
+      ? dailyChallenge.highestTier
+      : gameState.highestTierReached;
+  const tierData = mochiTiers[highestTier];
+
+  // Title with day number for daily mode
+  if (gameMode === "daily" && dailyChallenge) {
+    const dayNum = getDayNumber(dailyChallenge.date);
+    const dailyAlreadyPlayed = dailyChallenge.played === true;
+
+    // Glowing day number
+    ctx.save();
+    ctx.shadowColor = nightMode ? "rgba(255, 200, 100, 0.5)" : "rgba(100, 150, 80, 0.5)";
+    ctx.shadowBlur = 20;
+    ctx.font = 'bold 48px "Segoe UI", sans-serif';
+    ctx.fillStyle = nightMode ? "rgba(255, 220, 150, 0.9)" : "rgba(80, 120, 60, 0.9)";
+    ctx.fillText(`#${dayNum}`, centerX, centerY - 60);
+    ctx.restore();
+
+    ctx.font = '16px "Segoe UI", sans-serif';
+    ctx.fillStyle = nightMode ? "rgba(200, 210, 220, 0.8)" : "rgba(100, 130, 90, 0.8)";
+    // Show "Daily Complete!" if already played, otherwise "Daily Challenge"
+    if (dailyAlreadyPlayed) {
+      ctx.fillStyle = nightMode ? "rgba(150, 220, 150, 0.9)" : "rgba(80, 140, 70, 0.9)";
+      ctx.fillText("Daily Complete!", centerX, centerY - 35);
+    } else {
+      ctx.fillText("Daily Challenge", centerX, centerY - 35);
+    }
+  } else {
+    ctx.font = 'bold 32px "Segoe UI", sans-serif';
+    ctx.fillStyle = nightMode ? "#E8E4E0" : "#3D5A3A";
+    ctx.fillText("Game Over", centerX, centerY - 50);
+  }
+
+  // Animated score
+  ctx.font = 'bold 36px "Segoe UI", sans-serif';
+  ctx.fillStyle = nightMode ? "#F0E8DC" : "#4A6741";
+  ctx.fillText(`${Math.floor(displayedScore).toLocaleString()}`, centerX, centerY + 5);
+
+  ctx.font = '14px "Segoe UI", sans-serif';
+  ctx.fillStyle = nightMode ? "rgba(200, 210, 220, 0.7)" : "rgba(100, 130, 90, 0.7)";
+  ctx.fillText("score", centerX, centerY + 25);
+
+  // Player rank (daily mode only)
+  if (gameMode === "daily" && leaderboard && leaderboard.length > 0 && playerName) {
+    const playerIndex = leaderboard.findIndex((e) => e.name === playerName);
+    if (playerIndex >= 0) {
+      ctx.font = '18px "Segoe UI", sans-serif';
+      ctx.fillStyle = nightMode ? "rgba(255, 200, 100, 0.9)" : "#7A9B6D";
+      ctx.fillText(`Rank #${playerIndex + 1}`, centerX, centerY + 55);
+    }
+  }
+
+  // Tier badge (highest achieved)
+  const badgeY = centerY + 90;
+  ctx.fillStyle = tierData.color.primary;
+  ctx.beginPath();
+  ctx.arc(centerX, badgeY, 20, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Tier name
+  ctx.font = '12px "Segoe UI", sans-serif';
+  ctx.fillStyle = nightMode ? "rgba(200, 210, 220, 0.7)" : "rgba(100, 130, 90, 0.7)";
+  ctx.fillText(`Highest: ${tierData.name}`, centerX, badgeY + 35);
+
+  ctx.restore();
 }
 
 export function drawMochi(context: CanvasContext, mochi: Mochi, isPreview: boolean = false): void {
@@ -1696,6 +1928,7 @@ export function drawUI(
   gameState: GameState,
   leaderboard?: LeaderboardEntry[],
   playerName?: string,
+  mochis?: Mochi[],
 ): void {
   const { ctx, width } = context;
   const { score, highScore, nextTier, gameOver, container, mouseX, mouseY } = gameState;
@@ -1822,315 +2055,27 @@ export function drawUI(
     drawLeaderboard(context, leaderboard, playerName, container);
   }
 
-  // Game over overlay - matcha themed
+  // Game over buttons - displayed below the container
+  // (The frosted overlay and results are drawn directly on the container in render())
   if (gameOver) {
-    const { gameMode, dailyChallenge } = gameState;
+    const { gameMode, dailyChallenge, container } = gameState;
+    const { hoveredButton, buttonHoverProgress, modalAnimationProgress } = gameState;
 
-    // Animation and display state
-    const { hoveredButton, buttonHoverProgress, modalAnimationProgress, displayedScore } =
-      gameState;
-
-    // Easing functions
-    const easeOutBack = (t: number) => {
-      const c1 = 1.70158;
-      const c3 = c1 + 1;
-      return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
-    };
     const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 
-    // Semi-transparent matcha overlay (fades in)
-    const overlayAlpha = Math.min(0.75, modalAnimationProgress * 0.75);
-    ctx.fillStyle = `rgba(60, 80, 50, ${overlayAlpha})`;
-    ctx.fillRect(0, 0, width, context.height);
-
-    // Check if daily already played (for layout calculation)
+    // Check if daily already played
     const dailyAlreadyPlayed = dailyChallenge?.played === true;
 
-    // Get highest tier reached
-    const highestTier =
-      gameMode === "daily" && dailyChallenge?.played
-        ? dailyChallenge.highestTier
-        : gameState.highestTierReached;
+    // Button area below container with more margin
+    const buttonAreaY = container.y + container.height + 40;
+    const centerX = container.x + container.width / 2;
 
-    // Panel setup with bounce animation
-    const panelX = width / 2;
-    const panelY = context.height / 2;
-    // Increased height to fit tier bar and mascot
-    const panelHeight = gameMode === "daily" ? 340 : dailyAlreadyPlayed ? 305 : 300;
-
-    // Set text alignment before save so it persists
     ctx.textAlign = "center";
 
-    // Apply bounce scale animation
-    const scaleProgress = easeOutBack(Math.min(1, modalAnimationProgress * 1.2));
-    ctx.save();
-    ctx.translate(panelX, panelY);
-    ctx.scale(scaleProgress, scaleProgress);
-    ctx.translate(-panelX, -panelY);
-
-    // Panel background with soft gradient
-    const panelGrad = ctx.createLinearGradient(
-      panelX,
-      panelY - 110,
-      panelX,
-      panelY - 110 + panelHeight,
-    );
-    panelGrad.addColorStop(0, "rgba(242, 248, 238, 0.97)");
-    panelGrad.addColorStop(0.5, "rgba(234, 243, 230, 0.97)");
-    panelGrad.addColorStop(1, "rgba(226, 238, 222, 0.97)");
-    ctx.fillStyle = panelGrad;
-    ctx.shadowColor = "rgba(80, 120, 70, 0.2)";
-    ctx.shadowBlur = 20;
-    ctx.shadowOffsetY = 4;
-    ctx.beginPath();
-    ctx.roundRect(panelX - 170, panelY - 110, 340, panelHeight, 20);
-    ctx.fill();
-
-    // Reset shadow
-    ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetY = 0;
-
-    // Soft border
-    ctx.strokeStyle = "rgba(122, 155, 109, 0.4)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Inner highlight
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(panelX - 168, panelY - 108, 336, panelHeight - 4, 19);
-    ctx.stroke();
-
-    // Mini mochi mascot showing highest tier achieved (top right of panel)
-    const mascotX = panelX + 125;
-    const mascotY = panelY - 60;
-    const mascotSize = 26;
-    const mascotBounce = Math.sin(Date.now() / 300) * 3;
-
-    // Check if mouse is hovering over mascot (for blush effect)
-    const mascotDx = mouseX - mascotX;
-    const mascotDy = mouseY - (mascotY + mascotBounce);
-    const isHoveringMascot = Math.sqrt(mascotDx * mascotDx + mascotDy * mascotDy) < mascotSize + 10;
-
-    // Get colors for the highest tier achieved
-    const tierData = mochiTiers[highestTier];
-    const mascotHappy = highestTier >= 5 || displayedScore >= 1000;
-
-    // Draw mascot body with tier colors
-    const mascotGradient = ctx.createRadialGradient(
-      mascotX - mascotSize * 0.2,
-      mascotY + mascotBounce - mascotSize * 0.2,
-      0,
-      mascotX,
-      mascotY + mascotBounce,
-      mascotSize * 1.2,
-    );
-    mascotGradient.addColorStop(0, tierData.color.highlight);
-    mascotGradient.addColorStop(0.3, tierData.color.primary);
-    mascotGradient.addColorStop(1, tierData.color.secondary);
-    ctx.fillStyle = mascotGradient;
-    ctx.beginPath();
-    ctx.arc(mascotX, mascotY + mascotBounce, mascotSize, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Mascot face - adjust colors for dark tiers
-    const isDarkTier = highestTier >= 8; // Chocolate, Black Sesame, Kuromame are dark
-    const faceColor = isDarkTier ? "#E8E4E0" : "#3D3530";
-    const eyeY = mascotY + mascotBounce - 3;
-
-    ctx.strokeStyle = faceColor;
-    ctx.fillStyle = faceColor;
-    ctx.lineWidth = 1.5;
-
-    // Eyes (happy = curved, shy/blushing = ^^ when hovered)
-    if (isHoveringMascot) {
-      // Shy happy eyes when hovered ^^
-      ctx.beginPath();
-      ctx.arc(mascotX - 7, eyeY, 3.5, Math.PI * 1.2, Math.PI * 1.8);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(mascotX + 7, eyeY, 3.5, Math.PI * 1.2, Math.PI * 1.8);
-      ctx.stroke();
-    } else if (mascotHappy) {
-      ctx.beginPath();
-      ctx.arc(mascotX - 7, eyeY, 3.5, Math.PI, 0, true);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(mascotX + 7, eyeY, 3.5, Math.PI, 0, true);
-      ctx.stroke();
-    } else {
-      ctx.beginPath();
-      ctx.arc(mascotX - 7, eyeY, 2.5, 0, Math.PI * 2);
-      ctx.arc(mascotX + 7, eyeY, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Cheeks - blush more when hovered!
-    const blushIntensity = isHoveringMascot ? 0.9 : 0.6;
-    const blushSize = isHoveringMascot ? 1.3 : 1;
-    ctx.fillStyle = tierData.color.cheek;
-    ctx.globalAlpha = blushIntensity;
-    ctx.beginPath();
-    ctx.ellipse(
-      mascotX - 14,
-      mascotY + mascotBounce + 4,
-      5 * blushSize,
-      3.5 * blushSize,
-      0,
-      0,
-      Math.PI * 2,
-    );
-    ctx.ellipse(
-      mascotX + 14,
-      mascotY + mascotBounce + 4,
-      5 * blushSize,
-      3.5 * blushSize,
-      0,
-      0,
-      Math.PI * 2,
-    );
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    // Mouth - small shy smile when hovered
-    ctx.strokeStyle = faceColor;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    if (isHoveringMascot) {
-      // Small shy smile
-      ctx.arc(mascotX, mascotY + mascotBounce + 6, 3, 0.2 * Math.PI, 0.8 * Math.PI);
-    } else if (mascotHappy) {
-      ctx.arc(mascotX, mascotY + mascotBounce + 5, 4, 0.1 * Math.PI, 0.9 * Math.PI);
-    } else {
-      ctx.moveTo(mascotX - 3, mascotY + mascotBounce + 7);
-      ctx.lineTo(mascotX + 3, mascotY + mascotBounce + 7);
-    }
-    ctx.stroke();
-
-    // Title - show day number for daily mode (centered in panel)
-    ctx.fillStyle = "#3D5A3A";
-    if (gameMode === "daily" && dailyChallenge) {
-      const dayNum = getDayNumber(dailyChallenge.date);
-      ctx.font = 'bold 28px "Segoe UI", sans-serif';
-      ctx.fillText(`Mochii #${dayNum}`, panelX, panelY - 70);
-      ctx.font = '18px "Segoe UI", sans-serif';
-      ctx.fillStyle = "#6B8A5E";
-      ctx.fillText("Daily Challenge", panelX, panelY - 47);
-    } else {
-      ctx.font = 'bold 32px "Segoe UI", sans-serif';
-      ctx.fillText("Game Over", panelX, panelY - 60);
-    }
-
-    // Animated score counter
-    ctx.font = 'bold 26px "Segoe UI", sans-serif';
-    ctx.fillStyle = "#4A6741";
-    ctx.fillText(`Score: ${Math.floor(displayedScore).toLocaleString()}`, panelX, panelY - 12);
-
-    // Player rank (daily mode only)
-    if (gameMode === "daily" && leaderboard && leaderboard.length > 0 && playerName) {
-      const playerIndex = leaderboard.findIndex((e) => e.name === playerName);
-      if (playerIndex >= 0) {
-        ctx.font = '14px "Segoe UI", sans-serif';
-        ctx.fillStyle = "#7A9B6D";
-        ctx.fillText(`Rank #${playerIndex + 1} of ${leaderboard.length}`, panelX, panelY + 6);
-      }
-    }
-
-    // Tier progression bar
-    const tierBarY = panelY + 18;
-    const tierBarWidth = 280;
-    const tierBarX = panelX - tierBarWidth / 2;
-    const tierCount = 11; // Total tiers (0-10)
-    const dotSize = 8;
-    const dotSpacing = tierBarWidth / (tierCount - 1);
-
-    // Draw tier progression
-    for (let i = 0; i < tierCount; i++) {
-      const dotX = tierBarX + i * dotSpacing;
-      const reached = i <= highestTier;
-      const isHighest = i === highestTier;
-
-      // Animate dots appearing
-      const dotDelay = i * 0.05;
-      const dotProgress = Math.max(0, Math.min(1, (modalAnimationProgress - dotDelay) * 2));
-
-      if (dotProgress > 0) {
-        ctx.save();
-        ctx.globalAlpha = dotProgress;
-
-        // Get tier color
-        const tierColors = [
-          "#F8F4EC",
-          "#F8D7DD",
-          "#F8E8A0",
-          "#F4A0A8",
-          "#F8C878",
-          "#A8C890",
-          "#C8A8D0",
-          "#C8A888",
-          "#8B6850",
-          "#5A5550",
-          "#3A3530",
-        ];
-
-        if (reached) {
-          // Filled dot with tier color
-          const pulseScale = isHighest ? 1 + Math.sin(Date.now() / 200) * 0.15 : 1;
-          ctx.fillStyle = tierColors[i];
-          ctx.strokeStyle = "rgba(60, 80, 50, 0.4)";
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.arc(dotX, tierBarY, (dotSize / 2) * pulseScale * dotProgress, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-        } else {
-          // Empty dot
-          ctx.fillStyle = "rgba(200, 200, 190, 0.5)";
-          ctx.beginPath();
-          ctx.arc(dotX, tierBarY, (dotSize / 2 - 1) * dotProgress, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        ctx.restore();
-      }
-    }
-
-    // Tier label
-    const tierNames = [
-      "Vanilla",
-      "Sakura",
-      "Yuzu",
-      "Strawberry",
-      "Mango",
-      "Matcha",
-      "Taro",
-      "Hojicha",
-      "Chocolate",
-      "Sesame",
-      "Kuromame",
-    ];
-    ctx.font = '12px "Segoe UI", sans-serif';
-    ctx.fillStyle = "#6B8A5E";
-    ctx.fillText(`Highest: ${tierNames[highestTier] || "Vanilla"}`, panelX, tierBarY + 22);
-
-    // Subtle divider between content and buttons
-    ctx.strokeStyle = "rgba(122, 155, 109, 0.15)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(panelX - 120, panelY + 50);
-    ctx.lineTo(panelX + 120, panelY + 50);
-    ctx.stroke();
-
-    ctx.restore(); // Restore from scale transform
-
-    // Ensure text alignment is centered for buttons
-    ctx.textAlign = "center";
-
-    // Button styling helper - larger, more comfortable buttons with hover effects
+    // Button styling helper - compact horizontal buttons
     const drawButton = (
       text: string,
+      x: number,
       y: number,
       style: "primary" | "secondary" | "tertiary" = "secondary",
       buttonId: "daily" | "freeplay" | "share",
@@ -2138,119 +2083,139 @@ export function drawUI(
       const isHovered = hoveredButton === buttonId;
       const hoverAmount = isHovered ? easeOutCubic(buttonHoverProgress) : 0;
 
+      // Fade in with modal animation
+      const fadeIn = Math.min(1, modalAnimationProgress * 1.5);
+
       // Animated scale on hover
-      const baseWidth = 180;
-      const baseHeight = 44;
+      const baseWidth = 120;
+      const baseHeight = 38;
       const scaleBoost = hoverAmount * 0.05;
       const btnWidth = baseWidth * (1 + scaleBoost);
       const btnHeight = baseHeight * (1 + scaleBoost);
 
       ctx.save();
-      ctx.textAlign = "center"; // Ensure centered text in buttons
+      ctx.globalAlpha = fadeIn;
+      ctx.textAlign = "center";
 
-      // Different styles for visual hierarchy with hover enhancements
+      // Night mode aware colors
+      const isNight = gameState.nightMode;
+      const primaryColor = isNight ? { r: 100, g: 140, b: 180 } : { r: 122, g: 155, b: 109 };
+      const textDark = isNight ? "rgba(200, 210, 220, 1)" : "rgba(60, 85, 52, 1)";
+
       if (style === "primary") {
-        // Primary: solid green, gets brighter on hover
         const brightness = 1 + hoverAmount * 0.15;
-        const r = Math.min(255, Math.round(122 * brightness));
-        const g = Math.min(255, Math.round(155 * brightness));
-        const b = Math.min(255, Math.round(109 * brightness));
+        const r = Math.min(255, Math.round(primaryColor.r * brightness));
+        const g = Math.min(255, Math.round(primaryColor.g * brightness));
+        const b = Math.min(255, Math.round(primaryColor.b * brightness));
         ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
         ctx.shadowColor = `rgba(0, 0, 0, ${0.15 + hoverAmount * 0.1})`;
         ctx.shadowBlur = 4 + hoverAmount * 6;
         ctx.shadowOffsetY = 2 + hoverAmount * 2;
       } else if (style === "secondary") {
-        // Secondary: transparent, fills in on hover
         const bgAlpha = 0.25 + hoverAmount * 0.35;
-        ctx.fillStyle = `rgba(122, 155, 109, ${bgAlpha})`;
+        ctx.fillStyle = `rgba(${primaryColor.r}, ${primaryColor.g}, ${primaryColor.b}, ${bgAlpha})`;
         if (isHovered) {
-          ctx.shadowColor = `rgba(122, 155, 109, ${hoverAmount * 0.3})`;
+          ctx.shadowColor = `rgba(${primaryColor.r}, ${primaryColor.g}, ${primaryColor.b}, ${hoverAmount * 0.3})`;
           ctx.shadowBlur = hoverAmount * 8;
           ctx.shadowOffsetY = hoverAmount * 2;
         }
       } else {
-        // Tertiary: subtle, becomes more visible on hover
         const bgAlpha = 0.15 + hoverAmount * 0.25;
-        ctx.fillStyle = `rgba(122, 155, 109, ${bgAlpha})`;
+        ctx.fillStyle = `rgba(${primaryColor.r}, ${primaryColor.g}, ${primaryColor.b}, ${bgAlpha})`;
         if (isHovered) {
-          ctx.shadowColor = `rgba(122, 155, 109, ${hoverAmount * 0.2})`;
+          ctx.shadowColor = `rgba(${primaryColor.r}, ${primaryColor.g}, ${primaryColor.b}, ${hoverAmount * 0.2})`;
           ctx.shadowBlur = hoverAmount * 6;
         }
       }
 
       ctx.beginPath();
-      ctx.roundRect(panelX - btnWidth / 2, y - btnHeight / 2, btnWidth, btnHeight, 12);
+      ctx.roundRect(x - btnWidth / 2, y - btnHeight / 2, btnWidth, btnHeight, 10);
       ctx.fill();
 
-      // Reset shadow before border
       ctx.shadowColor = "transparent";
       ctx.shadowBlur = 0;
       ctx.shadowOffsetY = 0;
 
-      // Border for secondary/tertiary buttons - gets more prominent on hover
       if (style !== "primary") {
         const borderAlpha = 0.4 + hoverAmount * 0.3;
-        ctx.strokeStyle = `rgba(122, 155, 109, ${borderAlpha})`;
+        ctx.strokeStyle = `rgba(${primaryColor.r}, ${primaryColor.g}, ${primaryColor.b}, ${borderAlpha})`;
         ctx.lineWidth = 1.5 + hoverAmount * 0.5;
         ctx.stroke();
       }
 
-      // Text color - white for primary, darker green for others (with hover adjustment)
-      if (style === "primary") {
-        ctx.fillStyle = "#FFFFFF";
-      } else {
-        // Text gets slightly darker/more prominent on hover
-        const textAlpha = 1 - hoverAmount * 0.1;
-        ctx.fillStyle = `rgba(60, 85, 52, ${textAlpha + hoverAmount * 0.1})`;
-      }
-
-      // Font size slightly increases on hover
-      const baseFontSize = style === "primary" ? 16 : 15;
+      ctx.fillStyle = style === "primary" ? "#FFFFFF" : textDark;
+      const baseFontSize = style === "primary" ? 14 : 13;
       const fontSize = baseFontSize + hoverAmount * 1;
       ctx.font =
         style === "primary"
           ? `bold ${fontSize}px "Segoe UI", sans-serif`
           : `${fontSize}px "Segoe UI", sans-serif`;
-      ctx.fillText(text, panelX, y + 6);
+      ctx.fillText(text, x, y + 5);
 
       ctx.restore();
     };
 
-    // Buttons - Share before Free Play in daily mode
-    const dailyBtnY = panelY + 70;
+    // Layout buttons horizontally below container, centered
     const hasShareButton = gameMode === "daily" && !!dailyChallenge;
-    const shareBtnY = panelY + 125;
-    const practiceBtnY = hasShareButton ? panelY + 180 : panelY + 125;
+    const buttonSpacing = 130;
 
-    if (dailyAlreadyPlayed) {
-      // Daily already completed - show friendly message
-      ctx.fillStyle = "#7A9B6D";
-      ctx.font = '14px "Segoe UI", sans-serif';
-      ctx.fillText("Today's daily complete!", panelX, dailyBtnY - 5);
-      ctx.fillStyle = "#8BA37E";
-      ctx.font = '12px "Segoe UI", sans-serif';
-      ctx.fillText("Come back tomorrow for a new challenge", panelX, dailyBtnY + 12);
-    } else {
-      // Daily button - primary if in daily mode, secondary otherwise
-      const dailyText =
-        gameMode === "daily" && dailyChallenge?.played ? "Daily" : "Daily Challenge";
-      drawButton(dailyText, dailyBtnY, gameMode === "daily" ? "primary" : "secondary", "daily");
-    }
-
-    // Share button (only for daily mode, positioned between daily and free play)
     if (hasShareButton) {
-      const shareText = gameState.shareCopiedTimer > 0 ? "Copied!" : "Share";
-      const shareStyle = gameState.shareCopiedTimer > 0 ? "primary" : "tertiary";
-      drawButton(shareText, shareBtnY, shareStyle, "share");
-    }
+      if (dailyAlreadyPlayed) {
+        // Daily complete: just two buttons centered (Share | Free Play)
+        const shareX = centerX - buttonSpacing / 2;
+        const freePlayX = centerX + buttonSpacing / 2;
 
-    // Free Play button
-    drawButton(
-      "Free Play",
-      practiceBtnY,
-      dailyAlreadyPlayed || gameMode === "practice" ? "primary" : "secondary",
-      "freeplay",
-    );
+        const shareText = gameState.shareCopiedTimer > 0 ? "Copied!" : "Share";
+        const shareStyle = gameState.shareCopiedTimer > 0 ? "primary" : "tertiary";
+        drawButton(shareText, shareX, buttonAreaY, shareStyle, "share");
+
+        drawButton("Free Play", freePlayX, buttonAreaY, "primary", "freeplay");
+      } else {
+        // Three buttons: Daily | Share | Free Play
+        const dailyX = centerX - buttonSpacing;
+        const shareX = centerX;
+        const freePlayX = centerX + buttonSpacing;
+
+        drawButton(
+          "Daily",
+          dailyX,
+          buttonAreaY,
+          gameMode === "daily" ? "primary" : "secondary",
+          "daily",
+        );
+
+        const shareText = gameState.shareCopiedTimer > 0 ? "Copied!" : "Share";
+        const shareStyle = gameState.shareCopiedTimer > 0 ? "primary" : "tertiary";
+        drawButton(shareText, shareX, buttonAreaY, shareStyle, "share");
+
+        drawButton("Free Play", freePlayX, buttonAreaY, "secondary", "freeplay");
+      }
+    } else {
+      if (dailyAlreadyPlayed) {
+        // Daily complete without share: just Free Play centered
+        drawButton("Free Play", centerX, buttonAreaY, "primary", "freeplay");
+      } else {
+        // Two buttons: Daily | Free Play
+        const dailyX = centerX - buttonSpacing / 2;
+        const freePlayX = centerX + buttonSpacing / 2;
+
+        drawButton(
+          "Daily",
+          dailyX,
+          buttonAreaY,
+          gameMode === "daily" ? "primary" : "secondary",
+          "daily",
+        );
+
+        drawButton(
+          "Free Play",
+          freePlayX,
+          buttonAreaY,
+          gameMode === "practice" ? "primary" : "secondary",
+          "freeplay",
+        );
+      }
+    }
   }
 
   // Draw info tooltip LAST (highest z-index, overlaps everything)
@@ -2872,6 +2837,15 @@ export function render(
 
   // Sort and draw mochi
   const sorted = [...mochis].sort((a, b) => a.cy - b.cy);
+
+  // If game over, find highest tier mochi for glow effect
+  let highestTierMochi: Mochi | null = null;
+  if (gameState.gameOver && mochis.length > 0) {
+    highestTierMochi = mochis.reduce((a, b) => (a.tier > b.tier ? a : b));
+    // Draw glow behind the highest tier mochi
+    drawMochiGlow(context.ctx, highestTierMochi);
+  }
+
   for (const mochi of sorted) {
     drawMochi(context, mochi);
   }
@@ -2879,8 +2853,14 @@ export function render(
   // Draw walking cat (in front of mochi)
   drawWalkingCat(context.ctx);
 
+  // If game over, draw frosted overlay and results on container
+  if (gameState.gameOver) {
+    drawFrostedOverlay(context.ctx, gameState.container, gameState.nightMode);
+    drawGameOverResults(context.ctx, gameState.container, gameState, leaderboard, playerName);
+  }
+
   // Draw UI on top
-  drawUI(context, gameState, leaderboard, playerName);
+  drawUI(context, gameState, leaderboard, playerName, mochis);
 
   // Draw moon/sun toggle
   drawMoon(context.ctx, context.width, context.height, gameState.nightMode);

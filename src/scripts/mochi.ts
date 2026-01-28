@@ -471,6 +471,11 @@ function update(dt: number): void {
   // Check game over
   if (checkGameOver()) {
     gameState.gameOver = true;
+    // Set all mochis to celebrating!
+    for (const mochi of mochis) {
+      mochi.emotion = 'celebrating';
+      mochi.emotionTimer = 99999; // Keep celebrating
+    }
     // Start modal animation
     gameState.modalAnimationProgress = 0;
     gameState.displayedScore = 0;
@@ -600,39 +605,83 @@ function handleMouseMove(e: MouseEvent): void {
 
 // Check which game over button is being hovered
 function getHoveredButton(x: number, y: number): 'daily' | 'freeplay' | 'share' | null {
-  const centerX = context.width / 2;
-  const centerY = context.height / 2;
+  const { container } = gameState;
 
-  // Button positions (must match renderer)
-  const dailyBtnY = centerY + 70;
+  // Button area below container (must match renderer)
+  const buttonAreaY = container.y + container.height + 40;
+  const centerX = container.x + container.width / 2;
+  const btnWidth = 120;
+  const btnHeight = 38;
+  const buttonSpacing = 130;
+
   const hasShareButton = gameState.gameMode === 'daily' && !!gameState.dailyChallenge;
-  const shareBtnY = centerY + 125;
-  const practiceBtnY = hasShareButton ? centerY + 180 : centerY + 125;
-  const btnWidth = 180;
-  const btnHeight = 44;
-
-  // Check if daily already played (button is replaced with message)
   const dailyAlreadyPlayed = gameState.dailyChallenge?.played === true;
 
-  // Check Daily button (only if not replaced with message)
-  if (!dailyAlreadyPlayed &&
-      x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
-      y >= dailyBtnY - btnHeight/2 && y <= dailyBtnY + btnHeight/2) {
-    return 'daily';
-  }
-
-  // Check Share button (only in daily mode)
   if (hasShareButton) {
-    if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
-        y >= shareBtnY - btnHeight/2 && y <= shareBtnY + btnHeight/2) {
-      return 'share';
-    }
-  }
+    if (dailyAlreadyPlayed) {
+      // Daily complete: just two buttons centered (Share | Free Play)
+      const shareX = centerX - buttonSpacing / 2;
+      const freePlayX = centerX + buttonSpacing / 2;
 
-  // Check Free Play button
-  if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
-      y >= practiceBtnY - btnHeight/2 && y <= practiceBtnY + btnHeight/2) {
-    return 'freeplay';
+      // Check Share button
+      if (x >= shareX - btnWidth/2 && x <= shareX + btnWidth/2 &&
+          y >= buttonAreaY - btnHeight/2 && y <= buttonAreaY + btnHeight/2) {
+        return 'share';
+      }
+
+      // Check Free Play button
+      if (x >= freePlayX - btnWidth/2 && x <= freePlayX + btnWidth/2 &&
+          y >= buttonAreaY - btnHeight/2 && y <= buttonAreaY + btnHeight/2) {
+        return 'freeplay';
+      }
+    } else {
+      // Three buttons: Daily | Share | Free Play
+      const dailyX = centerX - buttonSpacing;
+      const shareX = centerX;
+      const freePlayX = centerX + buttonSpacing;
+
+      // Check Daily button
+      if (x >= dailyX - btnWidth/2 && x <= dailyX + btnWidth/2 &&
+          y >= buttonAreaY - btnHeight/2 && y <= buttonAreaY + btnHeight/2) {
+        return 'daily';
+      }
+
+      // Check Share button
+      if (x >= shareX - btnWidth/2 && x <= shareX + btnWidth/2 &&
+          y >= buttonAreaY - btnHeight/2 && y <= buttonAreaY + btnHeight/2) {
+        return 'share';
+      }
+
+      // Check Free Play button
+      if (x >= freePlayX - btnWidth/2 && x <= freePlayX + btnWidth/2 &&
+          y >= buttonAreaY - btnHeight/2 && y <= buttonAreaY + btnHeight/2) {
+        return 'freeplay';
+      }
+    }
+  } else {
+    if (dailyAlreadyPlayed) {
+      // Daily complete without share: just Free Play centered
+      if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
+          y >= buttonAreaY - btnHeight/2 && y <= buttonAreaY + btnHeight/2) {
+        return 'freeplay';
+      }
+    } else {
+      // Two buttons: Daily | Free Play
+      const dailyX = centerX - buttonSpacing / 2;
+      const freePlayX = centerX + buttonSpacing / 2;
+
+      // Check Daily button
+      if (x >= dailyX - btnWidth/2 && x <= dailyX + btnWidth/2 &&
+          y >= buttonAreaY - btnHeight/2 && y <= buttonAreaY + btnHeight/2) {
+        return 'daily';
+      }
+
+      // Check Free Play button
+      if (x >= freePlayX - btnWidth/2 && x <= freePlayX + btnWidth/2 &&
+          y >= buttonAreaY - btnHeight/2 && y <= buttonAreaY + btnHeight/2) {
+        return 'freeplay';
+      }
+    }
   }
 
   return null;
@@ -819,62 +868,41 @@ function handleClick(e: MouseEvent): void {
   }
 
   if (gameState.gameOver) {
-    // Check which button was clicked on game over screen
-    const centerX = context.width / 2;
-    const centerY = context.height / 2;
-
-    // Button positions (must match renderer)
-    const dailyBtnY = centerY + 70;
-    const hasShareButton = gameState.gameMode === 'daily' && !!gameState.dailyChallenge;
-    const shareBtnY = centerY + 125;
-    const practiceBtnY = hasShareButton ? centerY + 180 : centerY + 125;
-    const btnWidth = 180;
-    const btnHeight = 44;
-
-    // Check if daily already played (button is replaced with message)
+    const { container } = gameState;
     const dailyAlreadyPlayed = gameState.dailyChallenge?.played === true;
 
-    // Check Daily Challenge button (only if not already played)
-    if (!dailyAlreadyPlayed &&
-        x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
-        y >= dailyBtnY - btnHeight/2 && y <= dailyBtnY + btnHeight/2) {
+    // Check if a button was clicked (use same logic as getHoveredButton)
+    const hoveredBtn = getHoveredButton(x, y);
+
+    if (hoveredBtn === 'daily') {
       initGameState('daily');
       return;
     }
 
-    // Check Share button (only shown for daily mode)
-    if (gameState.gameMode === 'daily' && gameState.dailyChallenge) {
-      if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
-          y >= shareBtnY - btnHeight/2 && y <= shareBtnY + btnHeight/2) {
-        const shareText = generateShareText(gameState.dailyChallenge);
-        copyToClipboard(shareText);
-        gameState.shareCopiedTimer = 90; // ~1.5 seconds at 60fps
-        return;
-      }
+    if (hoveredBtn === 'share' && gameState.dailyChallenge) {
+      const shareText = generateShareText(gameState.dailyChallenge);
+      copyToClipboard(shareText);
+      gameState.shareCopiedTimer = 90; // ~1.5 seconds at 60fps
+      return;
     }
 
-    // Check Free Play button
-    if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
-        y >= practiceBtnY - btnHeight/2 && y <= practiceBtnY + btnHeight/2) {
+    if (hoveredBtn === 'freeplay') {
       initGameState('practice');
       return;
     }
 
-    // Click outside modal when daily is completed -> switch to Free Play
-    if (dailyAlreadyPlayed) {
-      // Modal bounds (must match renderer)
-      const panelWidth = 340;
-      const panelHeight = gameState.gameMode === 'daily' ? 340 : 305;
-      const panelLeft = centerX - 170;
-      const panelRight = centerX + 170;
-      const panelTop = centerY - 110;
-      const panelBottom = panelTop + panelHeight;
+    // Click on the container overlay area -> restart game
+    const isOnContainer = x >= container.x && x <= container.x + container.width &&
+                          y >= container.y && y <= container.y + container.height;
 
-      const isOutsideModal = x < panelLeft || x > panelRight || y < panelTop || y > panelBottom;
-      if (isOutsideModal) {
+    if (isOnContainer) {
+      // If daily is complete, go to free play; otherwise restart current mode
+      if (dailyAlreadyPlayed) {
         initGameState('practice');
-        return;
+      } else {
+        initGameState(gameState.gameMode);
       }
+      return;
     }
 
     return;
@@ -954,62 +982,41 @@ function handleTouchEnd(e: TouchEvent): void {
   }
 
   if (gameState.gameOver) {
-    // Check which button was tapped on game over screen
-    const centerX = context.width / 2;
-    const centerY = context.height / 2;
-
-    // Button positions (must match renderer)
-    const dailyBtnY = centerY + 70;
-    const hasShareButton = gameState.gameMode === 'daily' && !!gameState.dailyChallenge;
-    const shareBtnY = centerY + 125;
-    const practiceBtnY = hasShareButton ? centerY + 180 : centerY + 125;
-    const btnWidth = 180;
-    const btnHeight = 44;
-
-    // Check if daily already played (button is replaced with message)
+    const { container } = gameState;
     const dailyAlreadyPlayed = gameState.dailyChallenge?.played === true;
 
-    // Check Daily Challenge button (only if not already played)
-    if (!dailyAlreadyPlayed &&
-        x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
-        y >= dailyBtnY - btnHeight/2 && y <= dailyBtnY + btnHeight/2) {
+    // Check if a button was tapped (use same logic as getHoveredButton)
+    const hoveredBtn = getHoveredButton(x, y);
+
+    if (hoveredBtn === 'daily') {
       initGameState('daily');
       return;
     }
 
-    // Check Share button (only shown for daily mode)
-    if (gameState.gameMode === 'daily' && gameState.dailyChallenge) {
-      if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
-          y >= shareBtnY - btnHeight/2 && y <= shareBtnY + btnHeight/2) {
-        const shareText = generateShareText(gameState.dailyChallenge);
-        copyToClipboard(shareText);
-        gameState.shareCopiedTimer = 90; // ~1.5 seconds at 60fps
-        return;
-      }
+    if (hoveredBtn === 'share' && gameState.dailyChallenge) {
+      const shareText = generateShareText(gameState.dailyChallenge);
+      copyToClipboard(shareText);
+      gameState.shareCopiedTimer = 90; // ~1.5 seconds at 60fps
+      return;
     }
 
-    // Check Free Play button
-    if (x >= centerX - btnWidth/2 && x <= centerX + btnWidth/2 &&
-        y >= practiceBtnY - btnHeight/2 && y <= practiceBtnY + btnHeight/2) {
+    if (hoveredBtn === 'freeplay') {
       initGameState('practice');
       return;
     }
 
-    // Tap outside modal when daily is completed -> switch to Free Play
-    if (dailyAlreadyPlayed) {
-      // Modal bounds (must match renderer)
-      const panelWidth = 340;
-      const panelHeight = gameState.gameMode === 'daily' ? 340 : 305;
-      const panelLeft = centerX - 170;
-      const panelRight = centerX + 170;
-      const panelTop = centerY - 110;
-      const panelBottom = panelTop + panelHeight;
+    // Tap on the container overlay area -> restart game
+    const isOnContainer = x >= container.x && x <= container.x + container.width &&
+                          y >= container.y && y <= container.y + container.height;
 
-      const isOutsideModal = x < panelLeft || x > panelRight || y < panelTop || y > panelBottom;
-      if (isOutsideModal) {
+    if (isOnContainer) {
+      // If daily is complete, go to free play; otherwise restart current mode
+      if (dailyAlreadyPlayed) {
         initGameState('practice');
-        return;
+      } else {
+        initGameState(gameState.gameMode);
       }
+      return;
     }
 
     return;
