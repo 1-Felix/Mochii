@@ -33,8 +33,9 @@ function detectLowEndDevice(): { isLowEnd: boolean; reason: string } {
     return { isLowEnd: true, reason: `cores:${navigator.hardwareConcurrency}` };
   }
 
-  // Check screen size (small screens often = mobile = lower performance)
-  if (window.innerWidth < 400 || window.innerHeight < 600) {
+  // Check screen size - only flag truly tiny screens (old devices)
+  // Modern phones can have small CSS viewports due to high DPI
+  if (window.innerWidth < 320 || window.innerHeight < 480) {
     return { isLowEnd: true, reason: `screen:${window.innerWidth}x${window.innerHeight}` };
   }
 

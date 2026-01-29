@@ -300,6 +300,9 @@ let wasCatWalking = false; // Track cat state for emotion reset
 // Track landing states for dust poof effect
 const previousLandingStates = new Map<number, boolean>();
 
+// Track 3-finger tap timing for double-tap quality toggle
+let lastThreeFingerTapTime = 0;
+
 // Fixed container size to prevent cheating
 const CONTAINER_WIDTH = 320;
 const CONTAINER_HEIGHT = 450;
@@ -854,7 +857,7 @@ function drawProfilingOverlay(): void {
 
   ctx.save();
   ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-  ctx.fillRect(x - 10, y - 5, 180, 205);
+  ctx.fillRect(x - 10, y - 5, 180, 220);
 
   ctx.fillStyle = '#00ff00';
   ctx.font = '12px monospace';
@@ -877,7 +880,8 @@ function drawProfilingOverlay(): void {
     `Quality: ${quality}`,
     `Reason: ${reason}`,
     ``,
-    `P/4-tap=close Q=quality`,
+    `P/4-tap = debug`,
+    `Q/3x2 = quality`,
   ];
 
   lines.forEach((line, i) => {
@@ -1260,6 +1264,24 @@ function handleTouchStart(e: TouchEvent): void {
   if (e.touches.length === 4) {
     e.preventDefault();
     profilingEnabled = !profilingEnabled;
+    return;
+  }
+
+  // Double 3-finger tap toggles quality mode on mobile
+  if (e.touches.length === 3) {
+    e.preventDefault();
+    const now = Date.now();
+    const timeSinceLastTap = now - lastThreeFingerTapTime;
+
+    if (timeSinceLastTap < 500) {
+      // Double tap detected - toggle quality
+      const currentQuality = getQualityMode();
+      setQualityMode(currentQuality === 'high' ? 'low' : 'high');
+      lastThreeFingerTapTime = 0; // Reset to prevent triple-tap triggering
+    } else {
+      // First tap - record time
+      lastThreeFingerTapTime = now;
+    }
     return;
   }
 }
