@@ -12,6 +12,20 @@ let lastTime = 0;
 let dropCooldown = 0;
 let playerName: string;
 
+// Performance profiling (toggle with 'P' key)
+let profilingEnabled = false;
+const perfMetrics = {
+  fps: 0,
+  frameTime: 0,
+  updateTime: 0,
+  physicsTime: 0,
+  renderTime: 0,
+  easterEggsTime: 0,
+  frameCount: 0,
+  lastFpsUpdate: 0,
+  frameTimes: [] as number[],
+};
+
 // Seeded random function for daily mode
 let seededRandom: (() => number) | null = null;
 
@@ -362,7 +376,7 @@ function update(dt: number): void {
       // Check for landing - spawn dust poof
       const wasLanded = previousLandingStates.get(mochi.id) ?? false;
       if (mochi.hasLanded && !wasLanded) {
-        // Just landed! Spawn dust poof at bottom of mochi
+        // Just landed! Spawn dust poof at bottom of mochi (Canvas 2D)
         const bottomY = mochi.cy + mochi.baseRadius * 0.8;
         const intensity = Math.min(2, Math.abs(mochi.impactVelocity) * 0.3 + 0.5);
         addDustPoof(mochi.cx, bottomY, intensity);
@@ -558,8 +572,17 @@ function gameLoop(timestamp: number): void {
     }
   }
 
+  // Performance profiling
+  const frameStart = profilingEnabled ? performance.now() : 0;
+
+  const updateStart = profilingEnabled ? performance.now() : 0;
   update(dt);
+  if (profilingEnabled) perfMetrics.physicsTime = performance.now() - updateStart;
+
+  const easterEggsStart = profilingEnabled ? performance.now() : 0;
   updateEasterEggs(dt);
+  
+  if (profilingEnabled) perfMetrics.easterEggsTime = performance.now() - easterEggsStart;
 
   // Check if cat just finished walking - reset mochi emotions
   const catWalking = isCatWalking();
@@ -573,9 +596,69 @@ function gameLoop(timestamp: number): void {
   }
   wasCatWalking = catWalking;
 
+  const renderStart = profilingEnabled ? performance.now() : 0;
   render(context, mochis, gameState, getLeaderboard(), playerName);
 
+  if (profilingEnabled) perfMetrics.renderTime = performance.now() - renderStart;
+
+  // Draw profiling overlay
+  if (profilingEnabled) {
+    perfMetrics.frameTime = performance.now() - frameStart;
+    perfMetrics.frameCount++;
+    perfMetrics.frameTimes.push(perfMetrics.frameTime);
+    if (perfMetrics.frameTimes.length > 60) perfMetrics.frameTimes.shift();
+
+    // Update FPS every 500ms
+    if (timestamp - perfMetrics.lastFpsUpdate > 500) {
+      perfMetrics.fps = Math.round(1000 / (perfMetrics.frameTimes.reduce((a, b) => a + b, 0) / perfMetrics.frameTimes.length));
+      perfMetrics.lastFpsUpdate = timestamp;
+    }
+
+    drawProfilingOverlay();
+  }
+
   animationId = requestAnimationFrame(gameLoop);
+}
+
+// Draw performance profiling overlay
+function drawProfilingOverlay(): void {
+  const ctx = context.ctx;
+  const x = context.width - 180;
+  const y = 10;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+  ctx.fillRect(x - 10, y - 5, 180, 130);
+
+  ctx.fillStyle = '#00ff00';
+  ctx.font = '12px monospace';
+  ctx.textAlign = 'left';
+
+  const lines = [
+    `FPS: ${perfMetrics.fps}`,
+    `Frame: ${perfMetrics.frameTime.toFixed(2)}ms`,
+    `Physics: ${perfMetrics.physicsTime.toFixed(2)}ms`,
+    `Effects: ${perfMetrics.easterEggsTime.toFixed(2)}ms`,
+    `Render: ${perfMetrics.renderTime.toFixed(2)}ms`,
+    `Mochis: ${mochis.length}`,
+    ``,
+    `Press P to close`,
+  ];
+
+  lines.forEach((line, i) => {
+    // Color code based on time spent
+    if (line.includes('ms')) {
+      const ms = parseFloat(line.split(':')[1]);
+      if (ms > 10) ctx.fillStyle = '#ff4444';
+      else if (ms > 5) ctx.fillStyle = '#ffaa00';
+      else ctx.fillStyle = '#00ff00';
+    } else {
+      ctx.fillStyle = '#00ff00';
+    }
+    ctx.fillText(line, x, y + 15 + i * 14);
+  });
+
+  ctx.restore();
 }
 
 function handleResize(): void {
@@ -690,6 +773,12 @@ function getHoveredButton(x: number, y: number): 'daily' | 'freeplay' | 'share' 
 function handleKeyDown(e: KeyboardEvent): void {
   gameState.lastInteraction = Date.now();
 
+  // Toggle performance profiling with 'P' key
+  if (e.key === 'p' || e.key === 'P') {
+    profilingEnabled = !profilingEnabled;
+    return;
+  }
+
   // Konami code detection
   if (e.code === KONAMI_CODE[konamiIndex]) {
     konamiIndex++;
@@ -720,7 +809,7 @@ function handleKeyDown(e: KeyboardEvent): void {
 function triggerKonamiEasterEgg(): void {
   gameState.easterEggActive = 'konami';
   gameState.easterEggTimer = 300; // ~5 seconds
-  addCherryBlossoms(context.width, context.height, 50);
+    addCherryBlossoms(context.width, context.height, 50);
   // Make all mochi show love
   for (const mochi of mochis) {
     mochi.emotion = 'love';
