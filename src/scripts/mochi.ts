@@ -1,6 +1,6 @@
 import type { Mochi, CanvasContext, GameState, Container, GameMode } from './types';
 import { createMochi, updateMochi, checkMochiCollision, canMerge, mochiTiers, defaultConfig, DROPPABLE_TIERS } from './physics';
-import { createCanvasContext, resizeCanvas, render, addMergeEffect, addCherryBlossoms, triggerCatWalk, updateEasterEggs, isCatWalking, initAmbientEffects, addDustPoof, MODE_TOGGLE_BOUNDS } from './renderer';
+import { createCanvasContext, resizeCanvas, render, addMergeEffect, addCherryBlossoms, triggerCatWalk, updateEasterEggs, isCatWalking, initAmbientEffects, addDustPoof, MODE_TOGGLE_BOUNDS, initQualityMode, getQualityMode, setQualityMode } from './renderer';
 import { initLeaderboard, getLeaderboard, getOrCreatePlayerName, submitScore, setLeaderboardMode, fetchLeaderboard } from './leaderboard';
 import { createSeededRandom, loadDailyChallenge, saveDailyChallenge, createTodayChallenge, generateShareText, copyToClipboard, getDayNumber, getTodayString } from './daily';
 import type { WorkerInputMessage, WorkerOutputMessage, PhysicsEvent } from './physics-types';
@@ -854,14 +854,16 @@ function drawProfilingOverlay(): void {
 
   ctx.save();
   ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-  ctx.fillRect(x - 10, y - 5, 180, 145);
+  ctx.fillRect(x - 10, y - 5, 180, 175);
 
   ctx.fillStyle = '#00ff00';
   ctx.font = '12px monospace';
   ctx.textAlign = 'left';
 
-  const workerStatus = useWorkerPhysics ? 'Worker' : 'Main Thread';
+  const workerStatus = useWorkerPhysics ? 'Worker' : 'Main';
   const workerColor = useWorkerPhysics ? '#00ff00' : '#ffaa00';
+  const quality = getQualityMode();
+  const qualityColor = quality === 'high' ? '#00ff00' : '#ffaa00';
 
   const lines = [
     `FPS: ${perfMetrics.fps}`,
@@ -870,9 +872,10 @@ function drawProfilingOverlay(): void {
     `Effects: ${perfMetrics.easterEggsTime.toFixed(2)}ms`,
     `Render: ${perfMetrics.renderTime.toFixed(2)}ms`,
     `Mochis: ${mochis.length}`,
-    `Mode: ${workerStatus}`,
+    `Physics: ${workerStatus}`,
+    `Quality: ${quality}`,
     ``,
-    `Press P to close`,
+    `P=close Q=quality`,
   ];
 
   lines.forEach((line, i) => {
@@ -882,8 +885,10 @@ function drawProfilingOverlay(): void {
       if (ms > 10) ctx.fillStyle = '#ff4444';
       else if (ms > 5) ctx.fillStyle = '#ffaa00';
       else ctx.fillStyle = '#00ff00';
-    } else if (line.startsWith('Mode:')) {
+    } else if (line.startsWith('Physics:') && !line.includes('ms')) {
       ctx.fillStyle = workerColor;
+    } else if (line.startsWith('Quality:')) {
+      ctx.fillStyle = qualityColor;
     } else {
       ctx.fillStyle = '#00ff00';
     }
@@ -1008,6 +1013,13 @@ function handleKeyDown(e: KeyboardEvent): void {
   // Toggle performance profiling with 'P' key
   if (e.key === 'p' || e.key === 'P') {
     profilingEnabled = !profilingEnabled;
+    return;
+  }
+
+  // Toggle quality mode with 'Q' key
+  if (e.key === 'q' || e.key === 'Q') {
+    const currentQuality = getQualityMode();
+    setQualityMode(currentQuality === 'high' ? 'low' : 'high');
     return;
   }
 
@@ -1364,6 +1376,9 @@ export function init(canvas: HTMLCanvasElement): () => void {
   // Initialize leaderboard and player
   playerName = getOrCreatePlayerName();
   initLeaderboard();
+
+  // Detect device capabilities and set quality mode
+  initQualityMode();
 
   // Initialize ambient effects (particles, fireflies, rain)
   initAmbientEffects(context.width, context.height);

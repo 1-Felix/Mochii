@@ -13,6 +13,52 @@ import { mochiTiers } from "./physics";
 import type { LeaderboardEntry } from "./leaderboard";
 import { getDayNumber } from "./daily";
 
+// Performance/Quality mode
+export type QualityMode = 'high' | 'low';
+let qualityMode: QualityMode = 'high';
+
+// Auto-detect low-end devices
+function detectLowEndDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+
+  // Check for low memory (if available)
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  if (nav.deviceMemory && nav.deviceMemory < 4) return true;
+
+  // Check for low CPU cores
+  if (navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4) return true;
+
+  // Check screen size (small screens often = mobile = lower performance)
+  if (window.innerWidth < 400 || window.innerHeight < 600) return true;
+
+  // Check for mobile user agent hints
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  if (isMobile) {
+    // Further check - older iPhones
+    const isOldiPhone = /iPhone\s(5|6|7|8|SE)/i.test(navigator.userAgent);
+    if (isOldiPhone) return true;
+  }
+
+  return false;
+}
+
+export function initQualityMode(): void {
+  qualityMode = detectLowEndDevice() ? 'low' : 'high';
+  console.log(`Quality mode: ${qualityMode}`);
+}
+
+export function setQualityMode(mode: QualityMode): void {
+  qualityMode = mode;
+}
+
+export function getQualityMode(): QualityMode {
+  return qualityMode;
+}
+
+// Cached vignette canvas for low quality mode
+let vignetteCanvas: HTMLCanvasElement | null = null;
+let vignetteCtx: CanvasRenderingContext2D | null = null;
+
 // Visual effects storage
 const mergeEffects: MergeEffect[] = [];
 const impactStars: ImpactStar[] = [];
@@ -145,34 +191,39 @@ export function initAmbientEffects(width: number, height: number): void {
   screenWidth = width;
   screenHeight = height;
 
+  // Particle counts based on quality mode
+  const particleCounts = qualityMode === 'low'
+    ? { ambient: 8, fireflies: 3, rain: 20, wisps: 4 }
+    : { ambient: 20, fireflies: 6, rain: 60, wisps: 12 };
+
   // Initialize ambient particles if empty
   if (ambientParticles.length === 0) {
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < particleCounts.ambient; i++) {
       ambientParticles.push({
         x: Math.random() * width,
         y: Math.random() * height,
         vx: (Math.random() - 0.5) * 0.2,
-        vy: (Math.random() - 0.5) * 0.12 - 0.06, // Gentle upward drift
+        vy: (Math.random() - 0.5) * 0.12 - 0.06,
         size: 2 + Math.random() * 2.5,
-        opacity: 0.25 + Math.random() * 0.2, // Reduced base opacity
+        opacity: 0.25 + Math.random() * 0.2,
         phase: Math.random() * Math.PI * 2,
-        life: Math.random(), // Start at random point in lifecycle
-        lifeSpeed: 0.003 + Math.random() * 0.004, // Slow fade
+        life: Math.random(),
+        lifeSpeed: 0.003 + Math.random() * 0.004,
         fadingIn: Math.random() > 0.5,
       });
     }
   }
 
-  // Initialize fireflies if empty (fewer for cozy vibe)
+  // Initialize fireflies if empty
   if (fireflies.length === 0) {
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < particleCounts.fireflies; i++) {
       fireflies.push({
         x: Math.random() * width,
         y: Math.random() * height * 0.7,
         vx: (Math.random() - 0.5) * 0.15,
         vy: (Math.random() - 0.5) * 0.1,
         glowPhase: Math.random() * Math.PI * 2,
-        glowSpeed: 0.008 + Math.random() * 0.012, // Slower, dreamier glow
+        glowSpeed: 0.008 + Math.random() * 0.012,
         size: 2 + Math.random() * 1.5,
       });
     }
@@ -180,7 +231,7 @@ export function initAmbientEffects(width: number, height: number): void {
 
   // Initialize rain drops if empty
   if (rainDrops.length === 0) {
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < particleCounts.rain; i++) {
       rainDrops.push({
         x: Math.random() * width,
         y: Math.random() * height,
@@ -193,7 +244,7 @@ export function initAmbientEffects(width: number, height: number): void {
 
   // Initialize warmth wisps if empty
   if (warmthWisps.length === 0) {
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < particleCounts.wisps; i++) {
       warmthWisps.push({
         x: Math.random() * width,
         y: height * 0.5 + Math.random() * height * 0.5,
@@ -1482,11 +1533,11 @@ export function drawMochi(context: CanvasContext, mochi: Mochi, isPreview: boole
 
   const path = getSmoothPath(points);
 
-  // Warm ambient glow around mochi
-  if (!isPreview && !merging) {
+  // Warm ambient glow around mochi - skip in low quality mode
+  if (!isPreview && !merging && qualityMode === 'high') {
     const glowRadius = baseRadius * 1.5;
     const glowGradient = ctx.createRadialGradient(cx, cy, baseRadius * 0.5, cx, cy, glowRadius);
-    glowGradient.addColorStop(0, `${color.primary}40`); // 25% opacity of primary color
+    glowGradient.addColorStop(0, `${color.primary}40`);
     glowGradient.addColorStop(0.5, `${color.primary}15`);
     glowGradient.addColorStop(1, `${color.primary}00`);
     ctx.fillStyle = glowGradient;
@@ -1495,30 +1546,42 @@ export function drawMochi(context: CanvasContext, mochi: Mochi, isPreview: boole
     ctx.fill();
   }
 
-  // Shadow
+  // Shadow - skip blur filter in low quality mode (very expensive)
   if (!isPreview) {
     ctx.save();
     ctx.translate(0, 8 + squishAmount * 4);
-    ctx.filter = "blur(12px)";
-    ctx.fillStyle = color.shadow;
-    ctx.fill(path);
+    if (qualityMode === 'high') {
+      ctx.filter = "blur(12px)";
+      ctx.fillStyle = color.shadow;
+      ctx.fill(path);
+    } else {
+      // Low quality: simple offset shadow without blur
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = '#000';
+      ctx.fill(path);
+      ctx.globalAlpha = 1;
+    }
     ctx.restore();
   }
 
-  // Body gradient
-  const gradient = ctx.createRadialGradient(
-    cx - baseRadius * 0.2,
-    cy - baseRadius * 0.2,
-    0,
-    cx,
-    cy,
-    baseRadius * 1.2,
-  );
-  gradient.addColorStop(0, color.highlight);
-  gradient.addColorStop(0.3, color.primary);
-  gradient.addColorStop(1, color.secondary);
-
-  ctx.fillStyle = gradient;
+  // Body - use gradient in high quality, solid color in low quality
+  if (qualityMode === 'high') {
+    const gradient = ctx.createRadialGradient(
+      cx - baseRadius * 0.2,
+      cy - baseRadius * 0.2,
+      0,
+      cx,
+      cy,
+      baseRadius * 1.2,
+    );
+    gradient.addColorStop(0, color.highlight);
+    gradient.addColorStop(0.3, color.primary);
+    gradient.addColorStop(1, color.secondary);
+    ctx.fillStyle = gradient;
+  } else {
+    // Low quality: solid color
+    ctx.fillStyle = color.primary;
+  }
   ctx.fill(path);
 
   // Outline
@@ -1528,20 +1591,22 @@ export function drawMochi(context: CanvasContext, mochi: Mochi, isPreview: boole
   ctx.stroke(path);
   ctx.globalAlpha = 1;
 
-  // Highlight
-  const highlightGradient = ctx.createRadialGradient(
-    cx - baseRadius * 0.15,
-    cy - baseRadius * 0.3,
-    0,
-    cx - baseRadius * 0.15,
-    cy - baseRadius * 0.3,
-    baseRadius * 0.45,
-  );
-  highlightGradient.addColorStop(0, "rgba(255, 255, 255, 0.5)");
-  highlightGradient.addColorStop(0.5, "rgba(255, 255, 255, 0.15)");
-  highlightGradient.addColorStop(1, "rgba(255, 255, 255, 0)");
-  ctx.fillStyle = highlightGradient;
-  ctx.fill(path);
+  // Highlight - skip in low quality mode
+  if (qualityMode === 'high') {
+    const highlightGradient = ctx.createRadialGradient(
+      cx - baseRadius * 0.15,
+      cy - baseRadius * 0.3,
+      0,
+      cx - baseRadius * 0.15,
+      cy - baseRadius * 0.3,
+      baseRadius * 0.45,
+    );
+    highlightGradient.addColorStop(0, "rgba(255, 255, 255, 0.5)");
+    highlightGradient.addColorStop(0.5, "rgba(255, 255, 255, 0.15)");
+    highlightGradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+    ctx.fillStyle = highlightGradient;
+    ctx.fill(path);
+  }
 
   // Face
   if (!isPreview || baseRadius > 20) {
@@ -2656,12 +2721,38 @@ function drawSpeakerIcon(
   ctx.restore();
 }
 
+// Cache vignette dimensions to detect when we need to regenerate
+let cachedVignetteWidth = 0;
+let cachedVignetteHeight = 0;
+
 function drawVignette(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  // Skip vignette entirely in low quality mode
+  if (qualityMode === 'low') return;
+
+  // Use cached vignette canvas if available and size matches
+  if (vignetteCanvas && cachedVignetteWidth === width && cachedVignetteHeight === height) {
+    ctx.drawImage(vignetteCanvas, 0, 0);
+    return;
+  }
+
+  // Create or resize vignette cache
+  if (!vignetteCanvas) {
+    vignetteCanvas = document.createElement('canvas');
+    vignetteCtx = vignetteCanvas.getContext('2d');
+  }
+
+  vignetteCanvas.width = width;
+  vignetteCanvas.height = height;
+  cachedVignetteWidth = width;
+  cachedVignetteHeight = height;
+
+  if (!vignetteCtx) return;
+
   const centerX = width / 2;
   const centerY = height / 2;
   const radius = Math.max(width, height) * 0.75;
 
-  const gradient = ctx.createRadialGradient(
+  const gradient = vignetteCtx.createRadialGradient(
     centerX,
     centerY,
     radius * 0.25,
@@ -2676,8 +2767,11 @@ function drawVignette(ctx: CanvasRenderingContext2D, width: number, height: numb
   gradient.addColorStop(0.9, "rgba(25, 15, 5, 0.3)");
   gradient.addColorStop(1, "rgba(20, 10, 0, 0.4)");
 
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, width, height);
+  vignetteCtx.fillStyle = gradient;
+  vignetteCtx.fillRect(0, 0, width, height);
+
+  // Draw from cache
+  ctx.drawImage(vignetteCanvas, 0, 0);
 }
 
 function drawWarmOverlay(
