@@ -1,6 +1,6 @@
 import type { Mochi, CanvasContext, GameState, Container, GameMode } from './types';
 import { createMochi, updateMochi, checkMochiCollision, canMerge, mochiTiers, defaultConfig, DROPPABLE_TIERS } from './physics';
-import { createCanvasContext, resizeCanvas, render, addMergeEffect, addCherryBlossoms, triggerCatWalk, updateEasterEggs, isCatWalking, initAmbientEffects, addDustPoof, MODE_TOGGLE_BOUNDS, initQualityMode, getQualityMode, setQualityMode } from './renderer';
+import { createCanvasContext, resizeCanvas, render, addMergeEffect, addCherryBlossoms, triggerCatWalk, updateEasterEggs, isCatWalking, initAmbientEffects, addDustPoof, MODE_TOGGLE_BOUNDS, initQualityMode, getQualityMode, setQualityMode, getQualityReason } from './renderer';
 import { initLeaderboard, getLeaderboard, getOrCreatePlayerName, submitScore, setLeaderboardMode, fetchLeaderboard } from './leaderboard';
 import { createSeededRandom, loadDailyChallenge, saveDailyChallenge, createTodayChallenge, generateShareText, copyToClipboard, getDayNumber, getTodayString } from './daily';
 import type { WorkerInputMessage, WorkerOutputMessage, PhysicsEvent } from './physics-types';
@@ -19,8 +19,8 @@ let physicsWorker: Worker | null = null;
 let useWorkerPhysics = false;
 let pendingPhysicsUpdate = false;
 
-// Performance profiling (toggle with 'P' key)
-let profilingEnabled = true;
+// Performance profiling (toggle with 'P' key or 4-finger tap on mobile)
+let profilingEnabled = false;
 const perfMetrics = {
   fps: 0,
   frameTime: 0,
@@ -854,7 +854,7 @@ function drawProfilingOverlay(): void {
 
   ctx.save();
   ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-  ctx.fillRect(x - 10, y - 5, 180, 175);
+  ctx.fillRect(x - 10, y - 5, 180, 205);
 
   ctx.fillStyle = '#00ff00';
   ctx.font = '12px monospace';
@@ -864,6 +864,7 @@ function drawProfilingOverlay(): void {
   const workerColor = useWorkerPhysics ? '#00ff00' : '#ffaa00';
   const quality = getQualityMode();
   const qualityColor = quality === 'high' ? '#00ff00' : '#ffaa00';
+  const reason = getQualityReason();
 
   const lines = [
     `FPS: ${perfMetrics.fps}`,
@@ -874,8 +875,9 @@ function drawProfilingOverlay(): void {
     `Mochis: ${mochis.length}`,
     `Physics: ${workerStatus}`,
     `Quality: ${quality}`,
+    `Reason: ${reason}`,
     ``,
-    `P=close Q=quality`,
+    `P/4-tap=close Q=quality`,
   ];
 
   lines.forEach((line, i) => {
@@ -889,6 +891,8 @@ function drawProfilingOverlay(): void {
       ctx.fillStyle = workerColor;
     } else if (line.startsWith('Quality:')) {
       ctx.fillStyle = qualityColor;
+    } else if (line.startsWith('Reason:')) {
+      ctx.fillStyle = '#888888';
     } else {
       ctx.fillStyle = '#00ff00';
     }
@@ -1251,6 +1255,15 @@ function handleClick(e: MouseEvent): void {
   dropMochi(x);
 }
 
+function handleTouchStart(e: TouchEvent): void {
+  // 4-finger tap toggles profiling overlay on mobile
+  if (e.touches.length === 4) {
+    e.preventDefault();
+    profilingEnabled = !profilingEnabled;
+    return;
+  }
+}
+
 function handleTouchMove(e: TouchEvent): void {
   e.preventDefault();
   gameState.lastInteraction = Date.now();
@@ -1393,6 +1406,7 @@ export function init(canvas: HTMLCanvasElement): () => void {
   window.addEventListener('keydown', handleKeyDown);
   canvas.addEventListener('mousemove', handleMouseMove);
   canvas.addEventListener('click', handleClick);
+  canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
   canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
   canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
 
@@ -1407,6 +1421,7 @@ export function init(canvas: HTMLCanvasElement): () => void {
     window.removeEventListener('keydown', handleKeyDown);
     canvas.removeEventListener('mousemove', handleMouseMove);
     canvas.removeEventListener('click', handleClick);
+    canvas.removeEventListener('touchstart', handleTouchStart);
     canvas.removeEventListener('touchmove', handleTouchMove);
     canvas.removeEventListener('touchend', handleTouchEnd);
     // Terminate physics worker

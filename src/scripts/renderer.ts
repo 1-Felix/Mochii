@@ -16,43 +16,59 @@ import { getDayNumber } from "./daily";
 // Performance/Quality mode
 export type QualityMode = 'high' | 'low';
 let qualityMode: QualityMode = 'high';
+let qualityReason: string = 'default';
 
-// Auto-detect low-end devices
-function detectLowEndDevice(): boolean {
-  if (typeof window === 'undefined') return false;
+// Auto-detect low-end devices and return reason
+function detectLowEndDevice(): { isLowEnd: boolean; reason: string } {
+  if (typeof window === 'undefined') return { isLowEnd: false, reason: 'ssr' };
 
   // Check for low memory (if available)
   const nav = navigator as Navigator & { deviceMemory?: number };
-  if (nav.deviceMemory && nav.deviceMemory < 4) return true;
+  if (nav.deviceMemory && nav.deviceMemory < 4) {
+    return { isLowEnd: true, reason: `memory:${nav.deviceMemory}GB` };
+  }
 
   // Check for low CPU cores
-  if (navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4) return true;
+  if (navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4) {
+    return { isLowEnd: true, reason: `cores:${navigator.hardwareConcurrency}` };
+  }
 
   // Check screen size (small screens often = mobile = lower performance)
-  if (window.innerWidth < 400 || window.innerHeight < 600) return true;
+  if (window.innerWidth < 400 || window.innerHeight < 600) {
+    return { isLowEnd: true, reason: `screen:${window.innerWidth}x${window.innerHeight}` };
+  }
 
   // Check for mobile user agent hints
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   if (isMobile) {
     // Further check - older iPhones
     const isOldiPhone = /iPhone\s(5|6|7|8|SE)/i.test(navigator.userAgent);
-    if (isOldiPhone) return true;
+    if (isOldiPhone) {
+      return { isLowEnd: true, reason: 'old-iphone' };
+    }
   }
 
-  return false;
+  return { isLowEnd: false, reason: 'capable' };
 }
 
 export function initQualityMode(): void {
-  qualityMode = detectLowEndDevice() ? 'low' : 'high';
-  console.log(`Quality mode: ${qualityMode}`);
+  const detection = detectLowEndDevice();
+  qualityMode = detection.isLowEnd ? 'low' : 'high';
+  qualityReason = detection.reason;
+  console.log(`Quality mode: ${qualityMode} (${qualityReason})`);
 }
 
 export function setQualityMode(mode: QualityMode): void {
   qualityMode = mode;
+  qualityReason = 'manual';
 }
 
 export function getQualityMode(): QualityMode {
   return qualityMode;
+}
+
+export function getQualityReason(): string {
+  return qualityReason;
 }
 
 // Cached vignette canvas for low quality mode
@@ -597,6 +613,61 @@ export function drawContainer(
 ): void {
   const { ctx } = context;
   const { x, y, width, height, wallThickness, overflowLine } = container;
+
+  // Low quality mode - flat design
+  if (qualityMode === 'low') {
+    const wallColor = nightMode ? '#5D4E3C' : '#7A9B6D';
+    const innerColor = nightMode ? 'rgba(35, 45, 65, 0.9)' : 'rgba(210, 225, 200, 0.85)';
+    const strokeColor = nightMode ? '#4A3D2E' : '#5C7A52';
+    const dangerColor = nightMode ? 'rgba(255, 180, 100, 0.4)' : 'rgba(180, 90, 90, 0.5)';
+
+    // Simple shadow
+    ctx.fillStyle = nightMode ? 'rgba(20, 15, 30, 0.2)' : 'rgba(60, 80, 50, 0.1)';
+    ctx.beginPath();
+    ctx.roundRect(x + 3, y + 3, width, height, 12);
+    ctx.fill();
+
+    // Container background (inside) - solid color
+    ctx.fillStyle = innerColor;
+    ctx.beginPath();
+    ctx.roundRect(x + wallThickness, y, width - wallThickness * 2, height - wallThickness, 8);
+    ctx.fill();
+
+    // Walls - solid color
+    ctx.fillStyle = wallColor;
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 2;
+
+    // Left wall
+    ctx.beginPath();
+    ctx.roundRect(x, y, wallThickness, height, [12, 0, 0, 12]);
+    ctx.fill();
+    ctx.stroke();
+
+    // Right wall
+    ctx.beginPath();
+    ctx.roundRect(x + width - wallThickness, y, wallThickness, height, [0, 12, 12, 0]);
+    ctx.fill();
+    ctx.stroke();
+
+    // Bottom wall
+    ctx.beginPath();
+    ctx.roundRect(x, y + height - wallThickness, width, wallThickness, [0, 0, 12, 12]);
+    ctx.fill();
+    ctx.stroke();
+
+    // Danger line
+    ctx.strokeStyle = dangerColor;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 8]);
+    ctx.beginPath();
+    ctx.moveTo(x + wallThickness, overflowLine);
+    ctx.lineTo(x + width - wallThickness, overflowLine);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    return;
+  }
 
   if (nightMode) {
     // Night mode - cozy wooden container with warm lighting
