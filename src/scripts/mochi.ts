@@ -3,6 +3,8 @@ import { createMochi, updateMochi, checkMochiCollision, canMerge, mochiTiers, de
 import { createCanvasContext, resizeCanvas, render, addMergeEffect, addCherryBlossoms, triggerCatWalk, updateEasterEggs, isCatWalking, initAmbientEffects, addDustPoof, MODE_TOGGLE_BOUNDS } from './renderer';
 import { initLeaderboard, getLeaderboard, getOrCreatePlayerName, submitScore, setLeaderboardMode, fetchLeaderboard } from './leaderboard';
 import { createSeededRandom, loadDailyChallenge, saveDailyChallenge, createTodayChallenge, generateShareText, copyToClipboard, getDayNumber, getTodayString } from './daily';
+import type { WorkerInputMessage, WorkerOutputMessage, PhysicsEvent } from './physics-types';
+import { serializeMochi, applyPhysicsToMochi } from './physics-types';
 
 let context: CanvasContext;
 let mochis: Mochi[] = [];
@@ -12,8 +14,13 @@ let lastTime = 0;
 let dropCooldown = 0;
 let playerName: string;
 
+// Physics worker for off-main-thread physics simulation
+let physicsWorker: Worker | null = null;
+let useWorkerPhysics = false;
+let pendingPhysicsUpdate = false;
+
 // Performance profiling (toggle with 'P' key)
-let profilingEnabled = false;
+let profilingEnabled = true;
 const perfMetrics = {
   fps: 0,
   frameTime: 0,
@@ -28,6 +35,181 @@ const perfMetrics = {
 
 // Seeded random function for daily mode
 let seededRandom: (() => number) | null = null;
+
+// Initialize physics worker (browser-only)
+function initPhysicsWorker(): void {
+  if (typeof window === 'undefined' || typeof Worker === 'undefined') {
+    console.warn('Web Workers not supported, using main thread physics');
+    return;
+  }
+
+  try {
+    physicsWorker = new Worker(
+      new URL('./physics-worker.ts', import.meta.url),
+      { type: 'module' }
+    );
+
+    physicsWorker.onmessage = handleWorkerMessage;
+    physicsWorker.onerror = (e) => {
+      console.error('Physics worker error:', e);
+      physicsWorker = null;
+      useWorkerPhysics = false;
+    };
+
+    // Initialize worker with config
+    physicsWorker.postMessage({
+      type: 'init',
+      config: defaultConfig,
+      container: gameState?.container,
+    } satisfies WorkerInputMessage);
+
+  } catch (e) {
+    console.warn('Failed to create physics worker:', e);
+    physicsWorker = null;
+  }
+}
+
+// Handle messages from physics worker
+function handleWorkerMessage(e: MessageEvent<WorkerOutputMessage>): void {
+  const message = e.data;
+
+  if (message.type === 'ready') {
+    useWorkerPhysics = true;
+    console.log('Physics worker ready');
+    return;
+  }
+
+  if (message.type === 'updated') {
+    pendingPhysicsUpdate = false;
+
+    // Apply physics updates to mochis
+    const updatedMochis = message.mochis;
+    for (const serialized of updatedMochis) {
+      const mochi = mochis.find(m => m.id === serialized.id);
+      if (mochi) {
+        applyPhysicsToMochi(mochi, serialized);
+      }
+    }
+
+    // Process physics events
+    for (const event of message.events) {
+      handlePhysicsEvent(event);
+    }
+  }
+}
+
+// Handle physics events from worker
+function handlePhysicsEvent(event: PhysicsEvent): void {
+  switch (event.event) {
+    case 'merge': {
+      const m1 = mochis.find(m => m.id === event.m1Id);
+      const m2 = mochis.find(m => m.id === event.m2Id);
+      if (m1 && m2) {
+        handleMergeFromWorker(m1, m2, event.x, event.y, event.tier);
+      }
+      break;
+    }
+
+    case 'landed': {
+      const mochi = mochis.find(m => m.id === event.mochiId);
+      if (mochi) {
+        // Trigger dust poof
+        const bottomY = mochi.cy + mochi.baseRadius * 0.8;
+        const intensity = Math.min(2, Math.abs(event.impactVelocity) * 0.3 + 0.5);
+        addDustPoof(mochi.cx, bottomY, intensity);
+      }
+      break;
+    }
+
+    case 'floorImpact': {
+      const mochi = mochis.find(m => m.id === event.mochiId);
+      if (mochi && event.impactVelocity > 5) {
+        mochi.emotion = 'squished';
+        mochi.emotionTimer = Math.min(20, event.impactVelocity * 2);
+        mochi.impactVelocity = event.impactVelocity;
+      }
+      break;
+    }
+
+    case 'gameOver':
+      triggerGameOver();
+      break;
+  }
+}
+
+// Handle merge triggered by worker
+function handleMergeFromWorker(m1: Mochi, m2: Mochi, mergeX: number, mergeY: number, newTier: number): void {
+  // Add score
+  const points = mochiTiers[newTier].points;
+  gameState.score += points;
+
+  // Track stats
+  gameState.mergeCount++;
+  if (newTier > gameState.highestTierReached) {
+    gameState.highestTierReached = newTier;
+  }
+
+  // Update high score
+  if (gameState.score > gameState.highScore) {
+    gameState.highScore = gameState.score;
+    localStorage.setItem('mochiHighScore', gameState.highScore.toString());
+  }
+
+  // Visual effects
+  addMergeEffect(mergeX, mergeY, mochiTiers[newTier].radius, mochiTiers[newTier].color.primary);
+  playMergeSound(newTier);
+
+  // Delayed creation of new mochi
+  setTimeout(() => {
+    // Remove old mochis
+    mochis = mochis.filter(m => m !== m1 && m !== m2);
+
+    // Create new bigger mochi
+    const newMochi = createMochi(mergeX, mergeY, newTier);
+    newMochi.hasLanded = true;
+    newMochi.emotion = 'love';
+    newMochi.emotionTimer = 40;
+    newMochi.wobbleIntensity = 2;
+
+    // Give it a little upward pop
+    for (const p of newMochi.points) {
+      p.vy = -3;
+    }
+
+    mochis.push(newMochi);
+  }, 150);
+}
+
+// Trigger game over state
+function triggerGameOver(): void {
+  if (gameState.gameOver) return;
+
+  gameState.gameOver = true;
+  // Set all mochis to celebrating
+  for (const mochi of mochis) {
+    mochi.emotion = 'celebrating';
+    mochi.emotionTimer = 99999;
+  }
+  // Start modal animation
+  gameState.modalAnimationProgress = 0;
+  gameState.displayedScore = 0;
+  // Submit score
+  if (gameState.score > 0) {
+    const dailyDate = gameState.gameMode === 'daily' ? getTodayString() : undefined;
+    submitScore(playerName, gameState.score, gameState.gameMode, dailyDate);
+  }
+  // Save daily challenge result
+  if (gameState.gameMode === 'daily' && gameState.dailyChallenge && !gameState.dailyChallenge.played) {
+    gameState.dailyChallenge = {
+      ...gameState.dailyChallenge,
+      played: true,
+      score: gameState.score,
+      highestTier: gameState.highestTierReached,
+      mergeCount: gameState.mergeCount,
+    };
+    saveDailyChallenge(gameState.dailyChallenge);
+  }
+}
 
 // Saved game state per mode for toggle persistence
 interface SavedModeState {
@@ -337,18 +519,24 @@ function checkGameOver(): boolean {
 // Fixed timestep for physics stability
 const PHYSICS_DT = 0.5; // Target ~120fps physics rate
 
-function update(dt: number): void {
-  if (gameState.gameOver) return;
+// Send physics update to worker
+function postPhysicsToWorker(dt: number): void {
+  if (!physicsWorker || pendingPhysicsUpdate) return;
 
+  pendingPhysicsUpdate = true;
+  const serializedMochis = mochis.map(serializeMochi);
+
+  physicsWorker.postMessage({
+    type: 'update',
+    mochis: serializedMochis,
+    container: gameState.container,
+    dt,
+  } satisfies WorkerInputMessage);
+}
+
+// Main thread fallback physics (used when worker not available)
+function updatePhysicsMainThread(dt: number): void {
   const { container } = gameState;
-
-  // Update drop cooldown
-  if (dropCooldown > 0) {
-    dropCooldown -= dt;
-    if (dropCooldown <= 0) {
-      gameState.canDrop = true;
-    }
-  }
 
   // Sub-stepping: run physics at consistent rate for stability
   const numSteps = Math.ceil(dt / PHYSICS_DT);
@@ -370,13 +558,12 @@ function update(dt: number): void {
     }
   }
 
-  // Post-physics updates (once per frame, not per step)
+  // Post-physics updates for fallback mode
   for (const mochi of mochis) {
     if (!mochi.merging) {
       // Check for landing - spawn dust poof
       const wasLanded = previousLandingStates.get(mochi.id) ?? false;
       if (mochi.hasLanded && !wasLanded) {
-        // Just landed! Spawn dust poof at bottom of mochi (Canvas 2D)
         const bottomY = mochi.cy + mochi.baseRadius * 0.8;
         const intensity = Math.min(2, Math.abs(mochi.impactVelocity) * 0.3 + 0.5);
         addDustPoof(mochi.cx, bottomY, intensity);
@@ -386,76 +573,6 @@ function update(dt: number): void {
       // Decrement settle timer (grace period for game over)
       if (mochi.settleTimer > 0) {
         mochi.settleTimer -= dt;
-      }
-
-      // Decay impact velocity
-      if (mochi.impactVelocity > 0) {
-        mochi.impactVelocity *= 0.8;
-        if (mochi.impactVelocity < 0.5) mochi.impactVelocity = 0;
-      }
-
-      // Update blink animation
-      if (mochi.blinkState > 0) {
-        mochi.blinkState -= dt * 0.15;
-        if (mochi.blinkState <= 0) {
-          mochi.blinkState = 0;
-          mochi.blinkTimer = 90 + Math.random() * 180; // 1.5-4.5 seconds until next blink
-        }
-      } else {
-        mochi.blinkTimer -= dt;
-        if (mochi.blinkTimer <= 0) {
-          mochi.blinkState = 1; // Start blinking
-        }
-      }
-
-      // Update look direction (glancing at nearby mochi)
-      if (mochi.lookTimer > 0) {
-        mochi.lookTimer -= dt;
-        if (mochi.lookTimer <= 0) {
-          mochi.lookDirection = 0; // Return to center
-          mochi.lookTimer = 0;
-        }
-      } else if (Math.random() < 0.003 * dt) {
-        // Occasionally look at a nearby mochi
-        let nearestDist = Infinity;
-        let nearestDir = 0;
-        for (const other of mochis) {
-          if (other === mochi || other.merging) continue;
-          const dx = other.cx - mochi.cx;
-          const dy = other.cy - mochi.cy;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < mochi.baseRadius * 4 && dist < nearestDist) {
-            nearestDist = dist;
-            nearestDir = dx > 0 ? 1 : -1;
-          }
-        }
-        if (nearestDir !== 0) {
-          mochi.lookDirection = nearestDir * (0.5 + Math.random() * 0.5);
-          mochi.lookTimer = 30 + Math.random() * 60; // Look for 0.5-1.5 seconds
-        }
-      }
-
-      // Update idle timer for yawning/sleepy
-      const speed = Math.sqrt(mochi.vx * mochi.vx + mochi.vy * mochi.vy);
-      if (speed < 0.5 && mochi.hasLanded) {
-        mochi.idleTimer += dt;
-        // Trigger yawning after being idle for a while
-        if (mochi.idleTimer > 600 && mochi.idleTimer < 660 && mochi.emotion !== 'yawning' && mochi.emotion !== 'sleepy') {
-          mochi.emotion = 'yawning';
-          mochi.emotionTimer = 60;
-        }
-        // Transition from yawning to sleepy after yawn finishes
-        if (mochi.emotion === 'yawning' && mochi.emotionTimer <= 0) {
-          mochi.emotion = 'sleepy';
-          mochi.emotionTimer = 999; // Stay sleepy until disturbed
-        }
-      } else {
-        mochi.idleTimer = 0;
-        // Wake up if moving and was sleepy/yawning
-        if ((mochi.emotion === 'sleepy' || mochi.emotion === 'yawning') && speed > 2) {
-          mochi.emotion = 'happy';
-          mochi.emotionTimer = 30;
-        }
       }
     } else {
       // Update merge animation
@@ -484,32 +601,141 @@ function update(dt: number): void {
 
   // Check game over
   if (checkGameOver()) {
-    gameState.gameOver = true;
-    // Set all mochis to celebrating!
-    for (const mochi of mochis) {
-      mochi.emotion = 'celebrating';
-      mochi.emotionTimer = 99999; // Keep celebrating
+    triggerGameOver();
+  }
+}
+
+// Update animation states (runs on main thread regardless of worker)
+function updateAnimations(dt: number): void {
+  for (const mochi of mochis) {
+    if (mochi.merging) continue;
+
+    // Update emotion based on physics state (when using worker)
+    mochi.emotionTimer -= dt;
+    if (mochi.emotionTimer <= 0) {
+      const speed = Math.sqrt(mochi.vx ** 2 + mochi.vy ** 2);
+      let newEmotion = mochi.emotion;
+      let newTimer = 30;
+
+      if (mochi.jitterAmount > 2) {
+        newEmotion = 'stressed';
+        newTimer = 15;
+      } else if (speed > 15) {
+        newEmotion = 'flying';
+        newTimer = 15;
+      } else if (mochi.squishAmount > 0.5) {
+        newEmotion = 'squished';
+        newTimer = 20;
+      } else if (speed < 0.5 && mochi.squishAmount < 0.15) {
+        if (mochi.emotion !== 'happy' && mochi.emotion !== 'sleepy' && mochi.emotion !== 'yawning') {
+          newEmotion = 'happy';
+          newTimer = 120;
+        } else {
+          newTimer = 60;
+        }
+      } else if (mochi.squishAmount < 0.2 && speed < 4) {
+        if (mochi.emotion !== 'happy' && mochi.emotion !== 'sleepy') {
+          newEmotion = 'happy';
+          newTimer = 45;
+        }
+      }
+
+      if (newEmotion !== mochi.emotion) {
+        mochi.emotion = newEmotion;
+        mochi.emotionTimer = newTimer;
+      } else if (mochi.emotionTimer <= 0) {
+        mochi.emotionTimer = newTimer;
+      }
     }
-    // Start modal animation
-    gameState.modalAnimationProgress = 0;
-    gameState.displayedScore = 0;
-    // Submit score to leaderboard with mode and date
-    if (gameState.score > 0) {
-      const dailyDate = gameState.gameMode === 'daily' ? getTodayString() : undefined;
-      submitScore(playerName, gameState.score, gameState.gameMode, dailyDate);
+
+    // Decay impact velocity
+    if (mochi.impactVelocity > 0) {
+      mochi.impactVelocity *= 0.8;
+      if (mochi.impactVelocity < 0.5) mochi.impactVelocity = 0;
     }
-    // Save daily challenge result
-    if (gameState.gameMode === 'daily' && gameState.dailyChallenge && !gameState.dailyChallenge.played) {
-      gameState.dailyChallenge = {
-        ...gameState.dailyChallenge,
-        played: true,
-        score: gameState.score,
-        highestTier: gameState.highestTierReached,
-        mergeCount: gameState.mergeCount,
-      };
-      saveDailyChallenge(gameState.dailyChallenge);
+
+    // Update blink animation
+    if (mochi.blinkState > 0) {
+      mochi.blinkState -= dt * 0.15;
+      if (mochi.blinkState <= 0) {
+        mochi.blinkState = 0;
+        mochi.blinkTimer = 90 + Math.random() * 180;
+      }
+    } else {
+      mochi.blinkTimer -= dt;
+      if (mochi.blinkTimer <= 0) {
+        mochi.blinkState = 1;
+      }
+    }
+
+    // Update look direction (glancing at nearby mochi)
+    if (mochi.lookTimer > 0) {
+      mochi.lookTimer -= dt;
+      if (mochi.lookTimer <= 0) {
+        mochi.lookDirection = 0;
+        mochi.lookTimer = 0;
+      }
+    } else if (Math.random() < 0.003 * dt) {
+      let nearestDist = Infinity;
+      let nearestDir = 0;
+      for (const other of mochis) {
+        if (other === mochi || other.merging) continue;
+        const dx = other.cx - mochi.cx;
+        const dy = other.cy - mochi.cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < mochi.baseRadius * 4 && dist < nearestDist) {
+          nearestDist = dist;
+          nearestDir = dx > 0 ? 1 : -1;
+        }
+      }
+      if (nearestDir !== 0) {
+        mochi.lookDirection = nearestDir * (0.5 + Math.random() * 0.5);
+        mochi.lookTimer = 30 + Math.random() * 60;
+      }
+    }
+
+    // Update idle timer for yawning/sleepy
+    const speed = Math.sqrt(mochi.vx * mochi.vx + mochi.vy * mochi.vy);
+    if (speed < 0.5 && mochi.hasLanded) {
+      mochi.idleTimer += dt;
+      if (mochi.idleTimer > 600 && mochi.idleTimer < 660 && mochi.emotion !== 'yawning' && mochi.emotion !== 'sleepy') {
+        mochi.emotion = 'yawning';
+        mochi.emotionTimer = 60;
+      }
+      if (mochi.emotion === 'yawning' && mochi.emotionTimer <= 0) {
+        mochi.emotion = 'sleepy';
+        mochi.emotionTimer = 999;
+      }
+    } else {
+      mochi.idleTimer = 0;
+      if ((mochi.emotion === 'sleepy' || mochi.emotion === 'yawning') && speed > 2) {
+        mochi.emotion = 'happy';
+        mochi.emotionTimer = 30;
+      }
     }
   }
+}
+
+function update(dt: number): void {
+  if (gameState.gameOver) return;
+
+  // Update drop cooldown
+  if (dropCooldown > 0) {
+    dropCooldown -= dt;
+    if (dropCooldown <= 0) {
+      gameState.canDrop = true;
+    }
+  }
+
+  // Run physics (worker or main thread)
+  if (useWorkerPhysics && physicsWorker) {
+    postPhysicsToWorker(dt);
+  } else {
+    updatePhysicsMainThread(dt);
+  }
+
+  // Always update animations on main thread
+  updateAnimations(dt);
 }
 
 function gameLoop(timestamp: number): void {
@@ -628,11 +854,14 @@ function drawProfilingOverlay(): void {
 
   ctx.save();
   ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-  ctx.fillRect(x - 10, y - 5, 180, 130);
+  ctx.fillRect(x - 10, y - 5, 180, 145);
 
   ctx.fillStyle = '#00ff00';
   ctx.font = '12px monospace';
   ctx.textAlign = 'left';
+
+  const workerStatus = useWorkerPhysics ? 'Worker' : 'Main Thread';
+  const workerColor = useWorkerPhysics ? '#00ff00' : '#ffaa00';
 
   const lines = [
     `FPS: ${perfMetrics.fps}`,
@@ -641,17 +870,20 @@ function drawProfilingOverlay(): void {
     `Effects: ${perfMetrics.easterEggsTime.toFixed(2)}ms`,
     `Render: ${perfMetrics.renderTime.toFixed(2)}ms`,
     `Mochis: ${mochis.length}`,
+    `Mode: ${workerStatus}`,
     ``,
     `Press P to close`,
   ];
 
   lines.forEach((line, i) => {
-    // Color code based on time spent
+    // Color code based on time spent or status
     if (line.includes('ms')) {
       const ms = parseFloat(line.split(':')[1]);
       if (ms > 10) ctx.fillStyle = '#ff4444';
       else if (ms > 5) ctx.fillStyle = '#ffaa00';
       else ctx.fillStyle = '#00ff00';
+    } else if (line.startsWith('Mode:')) {
+      ctx.fillStyle = workerColor;
     } else {
       ctx.fillStyle = '#00ff00';
     }
@@ -1121,6 +1353,11 @@ function handleTouchEnd(e: TouchEvent): void {
 }
 
 export function init(canvas: HTMLCanvasElement): () => void {
+  // Browser-only check
+  if (typeof window === 'undefined') {
+    return () => {};
+  }
+
   context = createCanvasContext(canvas);
   resizeCanvas(context);
 
@@ -1132,6 +1369,9 @@ export function init(canvas: HTMLCanvasElement): () => void {
   initAmbientEffects(context.width, context.height);
 
   initGameState();
+
+  // Initialize physics worker (for better mobile performance)
+  initPhysicsWorker();
 
   // Event listeners
   window.addEventListener('resize', handleResize);
@@ -1154,6 +1394,12 @@ export function init(canvas: HTMLCanvasElement): () => void {
     canvas.removeEventListener('click', handleClick);
     canvas.removeEventListener('touchmove', handleTouchMove);
     canvas.removeEventListener('touchend', handleTouchEnd);
+    // Terminate physics worker
+    if (physicsWorker) {
+      physicsWorker.terminate();
+      physicsWorker = null;
+      useWorkerPhysics = false;
+    }
     mochis = [];
   };
 }
