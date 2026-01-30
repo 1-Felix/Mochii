@@ -1923,9 +1923,10 @@ function drawLeaderboard(
   const panelWidth = 180;
   const maxEntries = 5;
 
-  // Calculate fade zone - start fading 40px before container top
-  const fadeStartY = container.y - 40;
-  const fadeEndY = container.y + 20;
+  // Calculate fade zone - more aggressive fade on mobile for spacing
+  const isMobile = context.width < 500 || context.height < 700;
+  const fadeStartY = isMobile ? container.y - 120 : container.y - 40;
+  const fadeEndY = isMobile ? container.y - 40 : container.y + 20;
 
   // Helper to get opacity based on Y position
   const getYOpacity = (y: number): number => {
