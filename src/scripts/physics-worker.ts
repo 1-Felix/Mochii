@@ -12,7 +12,7 @@ let config: PhysicsConfig = {
   gravity: 0.6,
   mouseForce: 0.5,
   mouseRadius: 120,
-  wallBounce: 0.3,
+  wallBounce: 0.2, // Low bounce - dough absorbs energy (spec: 0.1-0.3)
   friction: 0.88,
   squishRecovery: 0.045,
 };
@@ -60,6 +60,93 @@ function calculateVelocity(points: Point[]): { vx: number; vy: number } {
     vy += p.vy;
   }
   return { vx: vx / points.length, vy: vy / points.length };
+}
+
+function calculateEdgeNormals(points: Point[]): { nx: number; ny: number }[] {
+  const normals: { nx: number; ny: number }[] = [];
+  const n = points.length;
+
+  for (let i = 0; i < n; i++) {
+    const p1 = points[i];
+    const p2 = points[(i + 1) % n];
+    const edgeX = p2.x - p1.x;
+    const edgeY = p2.y - p1.y;
+    const edgeLen = Math.sqrt(edgeX * edgeX + edgeY * edgeY);
+
+    if (edgeLen > 0.01) {
+      // Outward normal (perpendicular to edge, CW winding in screen coords)
+      normals.push({ nx: edgeY / edgeLen, ny: -edgeX / edgeLen });
+    } else {
+      normals.push({ nx: 0, ny: 0 });
+    }
+  }
+  return normals;
+}
+
+// Point-in-polygon test using ray casting
+function pointInPolygon(x: number, y: number, polygon: Point[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x, yi = polygon[i].y;
+    const xj = polygon[j].x, yj = polygon[j].y;
+    if (((yi > y) !== (yj > y)) &&
+        (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+// Find closest edge and its normal for collision resolution
+function closestEdgeInfo(x: number, y: number, polygon: Point[]): {
+  distance: number; nx: number; ny: number;
+} {
+  let minDist = Infinity;
+  let closestNx = 0, closestNy = 0;
+
+  for (let i = 0; i < polygon.length; i++) {
+    const p1 = polygon[i];
+    const p2 = polygon[(i + 1) % polygon.length];
+
+    const edgeX = p2.x - p1.x;
+    const edgeY = p2.y - p1.y;
+    const edgeLenSq = edgeX * edgeX + edgeY * edgeY;
+    if (edgeLenSq < 0.01) continue;
+
+    // Project point onto edge
+    const t = Math.max(0, Math.min(1,
+      ((x - p1.x) * edgeX + (y - p1.y) * edgeY) / edgeLenSq));
+
+    const closestX = p1.x + t * edgeX;
+    const closestY = p1.y + t * edgeY;
+    const dist = Math.sqrt((x - closestX) ** 2 + (y - closestY) ** 2);
+
+    if (dist < minDist) {
+      minDist = dist;
+      const edgeLen = Math.sqrt(edgeLenSq);
+      // Outward normal (CW winding in screen coords)
+      closestNx = edgeY / edgeLen;
+      closestNy = -edgeX / edgeLen;
+    }
+  }
+  return { distance: minDist, nx: closestNx, ny: closestNy };
+}
+
+// Check if two line segments intersect
+function segmentsIntersect(
+  a1x: number, a1y: number, a2x: number, a2y: number,
+  b1x: number, b1y: number, b2x: number, b2y: number
+): boolean {
+  const d1x = a2x - a1x, d1y = a2y - a1y;
+  const d2x = b2x - b1x, d2y = b2y - b1y;
+  const cross = d1x * d2y - d1y * d2x;
+  if (Math.abs(cross) < 0.0001) return false; // Parallel
+
+  const dx = b1x - a1x, dy = b1y - a1y;
+  const t = (dx * d2y - dy * d2x) / cross;
+  const u = (dx * d1y - dy * d1x) / cross;
+
+  return t > 0.01 && t < 0.99 && u > 0.01 && u < 0.99;
 }
 
 // Update a single mochi's physics
@@ -132,7 +219,8 @@ function updateMochiPhysics(
   }
   mochi.wobblePhase += 0.12 * dt;
 
-  // Spring forces
+  // Spring forces with viscous damping
+  const SPRING_DAMPING = 0.15; // Viscous damping coefficient
   for (let iter = 0; iter < 4; iter++) {
     for (const spring of springs) {
       const p1 = points[spring.p1];
@@ -142,40 +230,103 @@ function updateMochiPhysics(
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < 0.01) continue;
 
+      // Normalized spring direction
+      const nx = dx / dist;
+      const ny = dy / dist;
+
+      // Position-based spring force
       const diff = (dist - spring.restLength) / dist;
       const force = diff * spring.stiffness * config.springStiffness * dt;
 
-      p1.vx += dx * force;
-      p1.vy += dy * force;
-      p2.vx -= dx * force;
-      p2.vy -= dy * force;
+      // Viscous damping on relative velocity along spring axis
+      const relVx = p2.vx - p1.vx;
+      const relVy = p2.vy - p1.vy;
+      const relVelAlongSpring = relVx * nx + relVy * ny;
+      const dampingForce = relVelAlongSpring * SPRING_DAMPING * dt;
+
+      // Apply combined forces
+      p1.vx += dx * force + nx * dampingForce;
+      p1.vy += dy * force + ny * dampingForce;
+      p2.vx -= dx * force + nx * dampingForce;
+      p2.vy -= dy * force + ny * dampingForce;
     }
   }
 
-  // Pressure with hard core
+  // Pressure with hard core - applied to EDGE NORMALS (not radially)
   center = calculateCenter(points);
   const targetArea = Math.PI * mochi.baseRadius * mochi.baseRadius;
   const currentArea = calculateArea(points);
   const areaDiff = (targetArea - currentArea) / targetArea;
   const compressionRatio = currentArea / targetArea;
 
-  let pressureForce = areaDiff * config.pressure;
+  // Only apply pressure when compressed below target area
+  if (compressionRatio < 1.0) {
+    // Base pressure (normal squishiness)
+    let pressureForce = areaDiff * config.pressure;
 
-  const coreThreshold = mochi.tier <= 1 ? 0.75 : mochi.tier <= 3 ? 0.68 : 0.6;
-  const coreStrength = mochi.tier <= 1 ? 15 : mochi.tier <= 3 ? 12 : 8;
+    // Hard core: smaller mochi have stronger cores (they're at the bottom under more weight)
+    // First three tiers (0-2) get extra resistance since they're always at the bottom
+    const coreThreshold = mochi.tier <= 2 ? 0.82 : mochi.tier <= 4 ? 0.68 : 0.6;
+    const coreStrength = mochi.tier <= 2 ? 22 : mochi.tier <= 4 ? 12 : 8;
 
-  if (compressionRatio < coreThreshold) {
-    const coreCompression = (coreThreshold - compressionRatio) / coreThreshold;
-    pressureForce += coreCompression * coreCompression * config.pressure * coreStrength;
-  }
+    if (compressionRatio < coreThreshold) {
+      const coreCompression = (coreThreshold - compressionRatio) / coreThreshold;
+      pressureForce += coreCompression * coreCompression * config.pressure * coreStrength;
+    }
 
-  for (const p of points) {
-    const dx = p.x - center.x;
-    const dy = p.y - center.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist > 0.1) {
-      p.vx += (dx / dist) * pressureForce * dt;
-      p.vy += (dy / dist) * pressureForce * dt;
+    // Emergency damping below 50% compression (from spec)
+    if (compressionRatio < 0.5) {
+      for (const p of points) {
+        p.vx *= 0.7;
+        p.vy *= 0.7;
+      }
+    }
+
+    // Apply pressure using hybrid approach: blend edge normal with radial direction
+    // This prevents extreme elongation when compressed in corners
+    const edgeNormals = calculateEdgeNormals(points);
+    const n = points.length;
+    const maxRadius = mochi.baseRadius * (mochi.tier <= 2 ? 1.05 : mochi.tier <= 4 ? 1.15 : 1.25);
+
+    for (let i = 0; i < n; i++) {
+      const p = points[i];
+
+      // Calculate radial direction from center
+      const rdx = p.x - center.x;
+      const rdy = p.y - center.y;
+      const rDist = Math.sqrt(rdx * rdx + rdy * rdy);
+
+      // Skip if already at or beyond max radius
+      if (rDist >= maxRadius) continue;
+
+      let radialNx = 0, radialNy = 0;
+      if (rDist > 0.1) {
+        radialNx = rdx / rDist;
+        radialNy = rdy / rDist;
+      }
+
+      // Get edge normal
+      const prevNormal = edgeNormals[(i - 1 + n) % n];
+      const currNormal = edgeNormals[i];
+      let edgeNx = (prevNormal.nx + currNormal.nx) / 2;
+      let edgeNy = (prevNormal.ny + currNormal.ny) / 2;
+      const edgeLen = Math.sqrt(edgeNx * edgeNx + edgeNy * edgeNy);
+      if (edgeLen > 0.01) {
+        edgeNx /= edgeLen;
+        edgeNy /= edgeLen;
+      }
+
+      // Blend: 60% radial, 40% edge normal (prevents elongation while allowing deformation)
+      const blendNx = radialNx * 0.6 + edgeNx * 0.4;
+      const blendNy = radialNy * 0.6 + edgeNy * 0.4;
+      const blendLen = Math.sqrt(blendNx * blendNx + blendNy * blendNy);
+
+      if (blendLen > 0.01) {
+        const finalNx = blendNx / blendLen;
+        const finalNy = blendNy / blendLen;
+        p.vx += finalNx * pressureForce * dt;
+        p.vy += finalNy * pressureForce * dt;
+      }
     }
   }
 
@@ -189,6 +340,17 @@ function updateMochiPhysics(
     p.vy *= velocityDamping;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
+  }
+
+  // Velocity clamping - prevent physics explosions
+  const MAX_VELOCITY = 25;
+  for (const p of points) {
+    const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+    if (speed > MAX_VELOCITY) {
+      const scale = MAX_VELOCITY / speed;
+      p.vx *= scale;
+      p.vy *= scale;
+    }
   }
 
   // Angular damping
@@ -236,19 +398,39 @@ function updateMochiPhysics(
   let hadFloorImpact = false;
   let maxFloorImpact = 0;
 
+  // Stiction friction constants
+  const STICTION_THRESHOLD = 2.0; // Velocity below which stiction kicks in
+  const DYNAMIC_FRICTION = 0.88;
+  const MAX_STICTION = 0.98; // Nearly complete stop at rest
+
   for (const p of points) {
     // Floor
     if (p.y > bottom) {
       const impact = Math.abs(p.vy);
       p.y = bottom;
+
+      // Calculate velocity-dependent friction (stiction)
+      const horizontalSpeed = Math.abs(p.vx);
+      let friction: number;
+      if (horizontalSpeed < STICTION_THRESHOLD) {
+        // Interpolate from high stiction to dynamic friction
+        const t = horizontalSpeed / STICTION_THRESHOLD;
+        friction = MAX_STICTION - (MAX_STICTION - DYNAMIC_FRICTION) * t;
+      } else {
+        friction = DYNAMIC_FRICTION;
+      }
+
+      // Bounce if moving into the floor with enough velocity
       if (p.vy > 0.5) {
         const bounceStrength = config.wallBounce + Math.min(0.2, impact * 0.015);
         p.vy *= -bounceStrength;
-        p.vx *= config.friction;
+        p.vx *= friction;
         if (impact > maxFloorImpact) maxFloorImpact = impact;
         if (impact > 2) hadFloorImpact = true;
       } else {
+        // Very slow or moving up - stop vertical and apply stiction
         p.vy = 0;
+        p.vx *= friction; // Apply stiction even when not bouncing
       }
 
       // Mark as landed
@@ -284,7 +466,8 @@ function updateMochiPhysics(
   }
 
   // Final constraints
-  const minDimension = mochi.baseRadius * (mochi.tier <= 1 ? 1.0 : mochi.tier <= 3 ? 0.8 : 0.6);
+  // Use smaller values to avoid forcing rectangular shapes - rely on minPointRadius for roundness
+  const minDimension = mochi.baseRadius * (mochi.tier <= 2 ? 0.9 : mochi.tier <= 4 ? 0.7 : 0.5);
 
   // Check HEIGHT
   let minY = Infinity, maxY = -Infinity;
@@ -346,10 +529,11 @@ function updateMochiPhysics(
     }
   }
 
-  // Per-point radius constraints
+  // Per-point radius constraints - tighter to prevent bell-curve shape
   const finalCenter = calculateCenter(points);
-  const minPointRadius = mochi.baseRadius * (mochi.tier <= 1 ? 0.7 : mochi.tier <= 3 ? 0.4 : 0.3);
-  const maxPointRadius = mochi.baseRadius * (mochi.tier <= 1 ? 1.08 : mochi.tier <= 3 ? 1.3 : 1.4);
+  // First three tiers get much tighter constraints to stay more round
+  const minPointRadius = mochi.baseRadius * (mochi.tier <= 2 ? 0.85 : mochi.tier <= 4 ? 0.65 : 0.55);
+  const maxPointRadius = mochi.baseRadius * (mochi.tier <= 2 ? 1.05 : mochi.tier <= 4 ? 1.15 : 1.25);
 
   for (const p of points) {
     const dx = p.x - finalCenter.x;
@@ -395,16 +579,31 @@ function updateMochiPhysics(
   mochi.vx = newVel.vx;
   mochi.vy = newVel.vy;
 
-  // Cap squishAmount
-  const maxSquish = mochi.tier <= 1 ? 0.4 : mochi.tier <= 3 ? 0.5 : 0.6;
+  // Cap squishAmount - first three tiers should squish less visually
+  const maxSquish = mochi.tier <= 2 ? 0.3 : mochi.tier <= 4 ? 0.5 : 0.6;
   mochi.squishAmount = Math.min(mochi.squishAmount, maxSquish);
 
   // Ensure radius
-  const minRadiusRatio = mochi.tier <= 1 ? 0.6 : 0.5;
+  const minRadiusRatio = mochi.tier <= 2 ? 0.7 : 0.5;
   mochi.radius = Math.max(
     mochi.baseRadius * minRadiusRatio,
     mochi.baseRadius * (1 - mochi.squishAmount * 0.15)
   );
+
+  // Settling system: zero velocities when at rest to prevent micro-jitter
+  const SLEEP_VELOCITY_THRESHOLD = 0.3;
+  let totalVelocity = 0;
+  for (const p of points) {
+    totalVelocity += Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+  }
+  const avgVelocity = totalVelocity / points.length;
+
+  if (mochi.hasLanded && mochi.settleTimer <= 0 && avgVelocity < SLEEP_VELOCITY_THRESHOLD) {
+    for (const p of points) {
+      p.vx = 0;
+      p.vy = 0;
+    }
+  }
 }
 
 // Check collision between two mochis
@@ -416,66 +615,90 @@ function checkMochiCollision(m1: SerializedMochi, m2: SerializedMochi, events: P
   const dist = Math.sqrt(dx * dx + dy * dy);
   const minDist = m1.baseRadius + m2.baseRadius;
 
-  // Point penetration checks
+  // Polygon-based collision: detect vertex penetration and push along edge normals
   if (dist < minDist * 1.3 && dist > 0.1) {
-    const penetrationThreshold = 2;
-    const nx = dx / dist;
-    const ny = dy / dist;
-
-    let m2ExtentTowardM1 = 0;
-    for (const p of m2.points) {
-      const pdx = p.x - m2.cx;
-      const pdy = p.y - m2.cy;
-      const projection = -(pdx * nx + pdy * ny);
-      if (projection > m2ExtentTowardM1) m2ExtentTowardM1 = projection;
-    }
-
-    let m1ExtentTowardM2 = 0;
+    // Check m1's points against m2's polygon boundary
     for (const p of m1.points) {
-      const pdx = p.x - m1.cx;
-      const pdy = p.y - m1.cy;
-      const projection = pdx * nx + pdy * ny;
-      if (projection > m1ExtentTowardM2) m1ExtentTowardM2 = projection;
-    }
+      const edge = closestEdgeInfo(p.x, p.y, m2.points);
+      const isInside = pointInPolygon(p.x, p.y, m2.points);
 
-    for (const p of m1.points) {
-      const pdx = p.x - m2.cx;
-      const pdy = p.y - m2.cy;
-      const pDist = Math.sqrt(pdx * pdx + pdy * pdy);
-      const boundary = m2ExtentTowardM1 * 0.92;
+      // Push out if inside, or if very close to the edge (proximity threshold)
+      const proximityThreshold = 0.5;
+      if (isInside || edge.distance < proximityThreshold) {
+        const penetrationDepth = isInside ? edge.distance + proximityThreshold : proximityThreshold - edge.distance;
+        // Stronger push - fully resolve penetration
+        const pushAmount = penetrationDepth * 0.6;
+        p.x += edge.nx * pushAmount;
+        p.y += edge.ny * pushAmount;
 
-      if (pDist < boundary && pDist > 0.1) {
-        const penetration = boundary - pDist;
-        if (penetration > penetrationThreshold) {
-          const pnx = pdx / pDist;
-          const pny = pdy / pDist;
-          const targetDist = boundary + 1;
-          const pushAmount = (targetDist - pDist) * 0.2;
-          p.x += pnx * pushAmount;
-          p.y += pny * pushAmount;
-          p.vx *= 0.85;
-          p.vy *= 0.85;
+        // Damp velocity moving into the surface
+        const velIntoSurface = p.vx * (-edge.nx) + p.vy * (-edge.ny);
+        if (velIntoSurface > 0) {
+          p.vx += edge.nx * velIntoSurface * 0.7;
+          p.vy += edge.ny * velIntoSurface * 0.7;
         }
+        p.vx *= 0.8;
+        p.vy *= 0.8;
       }
     }
 
+    // Check m2's points against m1's polygon boundary
     for (const p of m2.points) {
-      const pdx = p.x - m1.cx;
-      const pdy = p.y - m1.cy;
-      const pDist = Math.sqrt(pdx * pdx + pdy * pdy);
-      const boundary = m1ExtentTowardM2 * 0.92;
+      const edge = closestEdgeInfo(p.x, p.y, m1.points);
+      const isInside = pointInPolygon(p.x, p.y, m1.points);
 
-      if (pDist < boundary && pDist > 0.1) {
-        const penetration = boundary - pDist;
-        if (penetration > penetrationThreshold) {
-          const pnx = pdx / pDist;
-          const pny = pdy / pDist;
-          const targetDist = boundary + 1;
-          const pushAmount = (targetDist - pDist) * 0.2;
-          p.x += pnx * pushAmount;
-          p.y += pny * pushAmount;
-          p.vx *= 0.85;
-          p.vy *= 0.85;
+      // Push out if inside, or if very close to the edge (proximity threshold)
+      const proximityThreshold = 0.5;
+      if (isInside || edge.distance < proximityThreshold) {
+        const penetrationDepth = isInside ? edge.distance + proximityThreshold : proximityThreshold - edge.distance;
+        // Stronger push - fully resolve penetration
+        const pushAmount = penetrationDepth * 0.6;
+        p.x += edge.nx * pushAmount;
+        p.y += edge.ny * pushAmount;
+
+        // Damp velocity moving into the surface
+        const velIntoSurface = p.vx * (-edge.nx) + p.vy * (-edge.ny);
+        if (velIntoSurface > 0) {
+          p.vx += edge.nx * velIntoSurface * 0.7;
+          p.vy += edge.ny * velIntoSurface * 0.7;
+        }
+        p.vx *= 0.8;
+        p.vy *= 0.8;
+      }
+    }
+
+    // Edge-edge intersection: detect when edges cross without vertices being inside
+    const n1 = m1.points.length;
+    const n2 = m2.points.length;
+    for (let i = 0; i < n1; i++) {
+      const a1 = m1.points[i];
+      const a2 = m1.points[(i + 1) % n1];
+      for (let j = 0; j < n2; j++) {
+        const b1 = m2.points[j];
+        const b2 = m2.points[(j + 1) % n2];
+
+        if (segmentsIntersect(a1.x, a1.y, a2.x, a2.y, b1.x, b1.y, b2.x, b2.y)) {
+          // Push the vertices of both edges apart along the separation direction
+          const sepX = m2.cx - m1.cx;
+          const sepY = m2.cy - m1.cy;
+          const sepDist = Math.sqrt(sepX * sepX + sepY * sepY);
+          if (sepDist > 0.1) {
+            const nx = sepX / sepDist;
+            const ny = sepY / sepDist;
+            const push = 0.5;
+
+            // Push m1's edge vertices away from m2
+            a1.x -= nx * push; a1.y -= ny * push;
+            a2.x -= nx * push; a2.y -= ny * push;
+            a1.vx *= 0.9; a1.vy *= 0.9;
+            a2.vx *= 0.9; a2.vy *= 0.9;
+
+            // Push m2's edge vertices away from m1
+            b1.x += nx * push; b1.y += ny * push;
+            b2.x += nx * push; b2.y += ny * push;
+            b1.vx *= 0.9; b1.vy *= 0.9;
+            b2.vx *= 0.9; b2.vy *= 0.9;
+          }
         }
       }
     }
@@ -542,7 +765,8 @@ function canMerge(m1: SerializedMochi, m2: SerializedMochi): boolean {
   const dx = m2.cx - m1.cx;
   const dy = m2.cy - m1.cy;
   const dist = Math.sqrt(dx * dx + dy * dy);
-  const minDist = (m1.baseRadius + m2.baseRadius) * 0.85;
+  // Merge when mochi are just touching (95% of combined radii)
+  const minDist = (m1.baseRadius + m2.baseRadius) * 0.95;
 
   return dist < minDist;
 }
